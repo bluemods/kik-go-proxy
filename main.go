@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -12,15 +13,15 @@ import (
 
 const (
     // Switch to 5223 once we implement the SSL server socket
-    SERVER_PORT = "5222"
+    PLAIN_SERVER_PORT = "5222"
+    // Switch to 5223 once we implement the SSL server socket
+    SSL_SERVER_PORT = "5223"
     // Listen on IPV4. Kik requires IPV4 so it should be no issue
     SERVER_TYPE = "tcp4" 
     // Client has this long to prove itself
     CLIENT_INITIAL_READ_TIMEOUT_SECONDS = 2
     // After initial read, abort if no data from client after this many seconds
     CLIENT_READ_TIMEOUT_SECONDS = 30
-
-    CUSTOM_BANNER = false
 
     // Host from 15.59.x on Android. All of them resolve to the same IPs, but we will use a newer version anyway
     KIK_HOST = "talk15590an.kik.com"
@@ -32,16 +33,63 @@ const (
     KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
     // After initial read, abort if no data from Kik after this many seconds
     KIK_READ_TIMEOUT_SECONDS = 30
+    
+    CUSTOM_BANNER = false
 )
 
 func main() {
-    server, err := net.Listen(SERVER_TYPE, ":" + SERVER_PORT)
+    port := flag.String("port", "", "Port to listen for incoming connections on")
+    certFile := flag.String("cert", "", "certificate PEM file")
+    keyFile := flag.String("key", "", "key PEM file")
+    flag.Parse()
+
+    if *certFile != "" && *keyFile != "" {
+        if *port == "" {
+            openSSLServer(SSL_SERVER_PORT, *certFile, *keyFile)
+        } else {
+            openSSLServer(*port, *certFile, *keyFile)
+        }
+    } else {
+        if *port == "" {
+            openPlainServer(PLAIN_SERVER_PORT)
+        } else {
+            openPlainServer(*port)
+        }
+    }
+}
+
+func openSSLServer(port string, certFile string, keyFile string) {
+    cert, err := tls.LoadX509KeyPair(certFile, keyFile)
     if err != nil {
-        fmt.Println("Error opening socket:", err.Error())
+        fmt.Println("Error loading key pair:", err.Error())
+        os.Exit(1)
+    }
+    config := &tls.Config{Certificates: []tls.Certificate{cert}}
+    server, err := tls.Listen(SERVER_TYPE, ":" + port, config)
+    if err != nil {
+        fmt.Println("Error opening SSL socket:", err.Error())
         os.Exit(1)
     }
     defer server.Close()
-    fmt.Println("Listening on :" + SERVER_PORT)
+    fmt.Println("Listening using SSL on :" + port)
+    for {
+        connection, err := server.Accept()
+        if err != nil {
+            fmt.Println("Error accepting: ", err.Error())
+        } else {
+            go handleNewConnection(connection)
+        }
+    }
+}
+
+func openPlainServer(port string) {
+    server, err := net.Listen(SERVER_TYPE, ":" + port)
+    if err != nil {
+        fmt.Println("Error opening unencrypted socket:", err.Error())
+        os.Exit(1)
+    }
+    defer server.Close()
+    fmt.Println("Listening unencrypted on :" + port)
     for {
         connection, err := server.Accept()
         if err != nil {
@@ -84,8 +132,8 @@ func handleNewConnection(clientConn net.Conn) {
         return
     }
 
-    go proxyClient("client", clientConn, *kikConn)
-    proxyKik("kik", *kikConn, clientConn)
+    go proxy("client", clientConn, kikConn)
+    proxy("kik", kikConn, clientConn)
 }
 
 // Future implementations will unify proxyKik and proxyClient (as they will both be using TLS)
@@ -93,16 +141,10 @@ func handleNewConnection(clientConn net.Conn) {
 // For now, both methods simply copy the packets to each others streams, making a blind proxy
 // (past the initial stream tags)
 
-func proxyKik(tag string, from tls.Conn, to net.Conn) {
+func proxy(tag string, from net.Conn, to net.Conn) {
     defer from.Close()
     defer to.Close()
-    if _, err := io.Copy(&from, to); err != nil {}
-}
-
-func proxyClient(tag string, from net.Conn, to tls.Conn) {
-    defer from.Close()
-    defer to.Close()
-    if _, err := io.Copy(from, &to); err != nil {}
+    if _, err := io.Copy(from, to); err != nil {}
 }
 
 func connectToKik(clientConn net.Conn, k *InitialStreamTag) (*tls.Conn, error) {
