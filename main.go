@@ -64,7 +64,10 @@ func openSSLServer(port string, certFile string, keyFile string) {
         fmt.Println("Error loading key pair:", err.Error())
         os.Exit(1)
     }
-    config := &tls.Config{Certificates: []tls.Certificate{cert}}
+    // Only accepting TLSv1.3 for now, as it's the most secure.
+    // All modern clients should support this.
+    // If it's an issue, change it to VersionTLS12
+    config := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13}
     server, err := tls.Listen(SERVER_TYPE, ":" + port, config)
     if err != nil {
         fmt.Println("Error opening SSL socket:", err.Error())
