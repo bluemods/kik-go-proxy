@@ -11,18 +11,27 @@ import (
 )
 
 const (
-    SERVER_PORT = "5222" // Switch to 5223 once we implement the SSL server socket
-    SERVER_TYPE = "tcp4"
+    // Switch to 5223 once we implement the SSL server socket
+    SERVER_PORT = "5222"
+    // Listen on IPV4. Kik requires IPV4 so it should be no issue
+    SERVER_TYPE = "tcp4" 
+    // Client has this long to prove itself
     CLIENT_INITIAL_READ_TIMEOUT_SECONDS = 2
-    CLIENT_READ_TIMEOUT_SECONDS = 60
+    // After initial read, abort if no data from client after this many seconds
+    CLIENT_READ_TIMEOUT_SECONDS = 30
 
     CUSTOM_BANNER = false
 
-    KIK_HOST = "simplean.kik.com"
+    // Host from 15.59.x on Android. All of them resolve to the same IPs, but we will use a newer version anyway
+    KIK_HOST = "talk15590an.kik.com"
+    // Kik has 443 and 5223 open, both behave identically
     KIK_PORT = "443"
+    // Kik uses TCP
     KIK_SERVER_TYPE = "tcp"
+    // Kik shouldn't take longer than 5s to respond. If it does, abort
     KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
-    KIK_READ_TIMEOUT_SECONDS = 60
+    // After initial read, abort if no data from Kik after this many seconds
+    KIK_READ_TIMEOUT_SECONDS = 30
 )
 
 func main() {
