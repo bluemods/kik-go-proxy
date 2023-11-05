@@ -24,8 +24,6 @@ type SortingMode struct {
 
 /*
 	Makes a 'k' tag, including correct spaces and order.
-
-	Can be used for validating incoming clients.
 */
 func makeKTag(attrs map[string]string) string {
 	BaseOrdering := &SortingMode{Base: -310256979, Offset: 13}
@@ -155,15 +153,15 @@ func mangleBytes(bytes []byte) int32 {
 	var j int = 0
 	
 	for k := 0; k < len(bytes); k += 4 {
-		j ^= ((byte_to_signed_int(int(bytes[k + 3])) << int32(24)) | 
-			 (byte_to_signed_int(int(bytes[k + 2]))) << int32(16)) | 
-			 (byte_to_signed_int(int(bytes[k + 1])) << int32(8))  | 
-			 (byte_to_signed_int(int(bytes[k])))
+		j ^= ((byteToSignedInt(int(bytes[k + 3])) << int32(24)) | 
+			 (byteToSignedInt(int(bytes[k + 2]))) << int32(16)) | 
+			 (byteToSignedInt(int(bytes[k + 1])) << int32(8))  | 
+			 (byteToSignedInt(int(bytes[k])))
 	}
 	return int32(j)
 }
 
-func byte_to_signed_int(num int) int {
+func byteToSignedInt(num int) int {
 	if num > 127 {
 		return (256 - num) * (-1)
 	} else {
