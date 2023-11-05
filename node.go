@@ -55,7 +55,7 @@ func parse(parser *xpp.XMLPullParser) (*Node, error) {
 	This limitation may be revisited later.
 */
 func parseInitialKString(xmpp string) (*Node, error) {
-	fixed := strings.TrimSuffix(xmpp, "</k>") + "</k>"
+	fixed := strings.Trim(strings.TrimSuffix(xmpp, "</k>"), " ") + "</k>"
 	return parseXmppString(fixed)
 }
 

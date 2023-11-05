@@ -1,4 +1,4 @@
-# kik-go-proxy
+# Kik XMPP Go Proxy
 
 Originally written in Java, but now being ported to Go (for performance reasons and learning), this tool allows you to proxy XMPP connections from your server to another by MITMing them.
 <br>
@@ -22,6 +22,7 @@ go build && ./kik-go-proxy
 
 ## Arguments
 If you use both -cert and -key, the program will use them to open an encrypted (SSL) connection.
+<br>
 The socket currently only accepts clients that support TLSv1.3.
 
 | Argument | Effect                                                          |
