@@ -21,12 +21,12 @@ func parse(parser *xpp.XMLPullParser) (*Node, error) {
         return nil, errors.New("Expected start tag")
     }
 	var ret = new(Node)
-	ret.Attributes = map[string]string{}
 	ret.Text = ""
+	ret.Name = parser.Name
+	ret.Attributes = map[string]string{}
 	for _, attr := range parser.Attrs {
 		ret.Attributes[attr.Name.Local] = attr.Value
 	}
-	ret.Name = parser.Name
 
 	for {
 		eventType, err := parser.Next()
@@ -56,6 +56,9 @@ func parse(parser *xpp.XMLPullParser) (*Node, error) {
 */
 func parseInitialKString(xmpp string) (*Node, error) {
 	fixed := strings.Trim(strings.TrimSuffix(xmpp, "</k>"), " ") + "</k>"
+	if !strings.HasPrefix(fixed, "<k ") {
+	    return nil, errors.New("Not a valid k tag\n" + xmpp)
+	}
 	return parseXmppString(fixed)
 }
 

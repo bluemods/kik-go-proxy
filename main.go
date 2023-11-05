@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"time"
@@ -31,8 +30,9 @@ const (
     KIK_SERVER_TYPE = "tcp"
     // Kik shouldn't take longer than 5s to respond. If it does, abort
     KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
-    // After initial read, abort if no data from Kik after this many seconds
-    KIK_READ_TIMEOUT_SECONDS = 30
+
+    // The buffer size for the client and kik socket
+    SOCKET_BUFFER_SIZE = 8192
     
     CUSTOM_BANNER = false
 )
@@ -135,24 +135,34 @@ func handleNewConnection(clientConn net.Conn) {
         return
     }
 
-    go proxy("client", clientConn, kikConn)
-    proxy("kik", kikConn, clientConn)
+    go proxy(clientConn, kikConn)
+    proxy(kikConn, clientConn)
 }
 
-// Future implementations will unify proxyKik and proxyClient (as they will both be using TLS)
-// We can also use the XmlPullParser to implement custom handling of stanzas.
-// For now, both methods simply copy the packets to each others streams, making a blind proxy
+// For now, both methods simply copy 
+// the packets to each others streams, making a blind proxy
 // (past the initial stream tags)
 
-func proxy(tag string, from net.Conn, to net.Conn) {
+func proxy(from net.Conn, to net.Conn) {
+    buf := make([]byte, SOCKET_BUFFER_SIZE)
+
     defer from.Close()
     defer to.Close()
-    if _, err := io.Copy(from, to); err != nil {}
+
+    for {
+        read, err := from.Read(buf)
+        if err != nil {
+            return
+        }
+        to.Write(buf[0:read])
+	from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
+    }
 }
 
 func connectToKik(clientConn net.Conn, k *InitialStreamTag) (*tls.Conn, error) {
     var config tls.Config = tls.Config{ServerName: KIK_HOST}
-    kikConn, err := tls.Dial(KIK_SERVER_TYPE, KIK_HOST + ":" + KIK_PORT, &config)
+    dialer := net.Dialer{Timeout: KIK_INITIAL_READ_TIMEOUT_SECONDS*time.Second}
+    kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, KIK_HOST + ":" + KIK_PORT, &config)
     if err != nil {
         return nil, err
     }
