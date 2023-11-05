@@ -11,13 +11,16 @@ Use cases for this include:
 - More stable connections to Kik
 - Debugging traffic from the official mobile clients (stock Kik)
 
+## Requirements
+Go >= 1.21.3 (on *nix it can be easily installed [here](https://github.com/udhos/update-golang))
+
 ## Install, build and run
 
 ```bash
 git clone https://github.com/bluemods/kik-go-proxy && cd kik-go-proxy
 ```
 ```bash
-go build && ./kik-go-proxy
+go mod tidy && go build && ./kik-go-proxy
 ```
 
 ## Arguments
