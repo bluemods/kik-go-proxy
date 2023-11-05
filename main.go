@@ -12,9 +12,9 @@ import (
 )
 
 const (
-    // Switch to 5223 once we implement the SSL server socket
+    // Default plaintext port
     PLAIN_SERVER_PORT = "5222"
-    // Switch to 5223 once we implement the SSL server socket
+    // Default SSL port
     SSL_SERVER_PORT = "5223"
     // Listen on IPV4. Kik requires IPV4 so it should be no issue
     SERVER_TYPE = "tcp4" 
