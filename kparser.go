@@ -18,7 +18,13 @@ Verifies the integrity of the stanza.
 if error returned is not nil, verification failed.
 */
 func (k InitialStreamTag) verify() error {
-	// TODO
+	expected := makeKTag(k.Attributes)
+	received := k.RawStanza
+	if expected != received {
+		return errors.New(
+			"initial stream tag failed verification\n" + 
+			"Expected: " + expected + "\nReceived: " + received)
+	}
 	return nil
 }
 

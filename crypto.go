@@ -27,7 +27,7 @@ type SortingMode struct {
 
 	Can be used for validating incoming clients.
 */
-func mapToString(attrs map[string]string) string {
+func makeKTag(attrs map[string]string) string {
 	BaseOrdering := &SortingMode{Base: -310256979, Offset: 13}
 	ExtendedOrdering := &SortingMode{Base: -1964139357, Offset: 7}
 	
@@ -216,6 +216,6 @@ func testMapSorting() {
 	testMap["g"] = "g"
 	testMap["h"] = "h"
 	
-	sorted := mapToString(testMap)
+	sorted := makeKTag(testMap)
 	fmt.Println("'" + sorted + "'")
 }
