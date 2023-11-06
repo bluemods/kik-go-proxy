@@ -8,7 +8,8 @@ import (
 	"log"
 	"net"
 	"os"
-    "strings"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -76,6 +77,9 @@ func main() {
 }
 
 func parseInterfaceFile(ipFile string) error {
+	if ipFile == "" {
+		return nil
+	}
 	file, err := os.Open(ipFile)
 	if err != nil {
 		return err
@@ -86,12 +90,20 @@ func parseInterfaceFile(ipFile string) error {
 
 	for scanner.Scan() {
 		ip := strings.Trim(scanner.Text(), " ")
-        log.Println("Adding interface IP " + ip)
+
+		// This allows us to include comments like
+		// 1.1.1.1 # comment here
+		i := strings.Index(ip, "#")
+		if i != -1 {
+			ip = strings.Trim(ip[:i], " ")
+		}
+		interfaceIps = append(interfaceIps, ip)
+		log.Println("Adding interface IP " + ip)
 	}
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-    return nil
+	return nil
 }
 
 func openSSLServer(port string, certFile string, keyFile string) {
@@ -158,7 +170,7 @@ func handleNewConnection(clientConn net.Conn) {
 	}
 
 	log.Println("Accepting from " + ipAddress + ": " + k.RawStanza)
-	kikConn, err := connectToKik(clientConn, *payload, &k.InterfaceName)
+	kikConn, err := connectToKik(clientConn, payload)
 	if err != nil {
 		log.Println("Failed to connect " + ipAddress + " to Kik: " + err.Error())
 		clientConn.Close()
@@ -189,11 +201,16 @@ func proxy(from net.Conn, to net.Conn) {
 	}
 }
 
-func connectToKik(clientConn net.Conn, sortedKTag string, interfaceIp *string) (*tls.Conn, error) {
+func connectToKik(clientConn net.Conn, payload *OutgoingKPayload) (*tls.Conn, error) {
 	config := tls.Config{ServerName: KIK_HOST}
 
 	var dialer net.Dialer
-	if interfaceIp != nil && *interfaceIp != "" {
+	if payload.InterfaceName != "" {
+		if !slices.Contains(interfaceIps, payload.InterfaceName) {
+			err := errors.New("Client requested to use unknown interface " +
+				payload.InterfaceName + ", aborting connection")
+			return nil, err
+		}
 		netInterface, err := net.InterfaceByName(INTERFACE_NAME)
 		if err != nil {
 			return nil, err
@@ -207,13 +224,13 @@ func connectToKik(clientConn net.Conn, sortedKTag string, interfaceIp *string) (
 
 		for i := 0; i < len(addrs); i++ {
 			ip := addrs[i].(*net.IPNet).IP
-			if ip.String() == *interfaceIp {
+			if ip.String() == payload.InterfaceName {
 				selectedIP = ip
 				break
 			}
 		}
 		if selectedIP == nil {
-			return nil, errors.New("Failed connecting via custom interface; '" + *interfaceIp + "' not found in " + INTERFACE_NAME)
+			return nil, errors.New("Failed connecting via custom interface; '" + payload.InterfaceName + "' not found in " + INTERFACE_NAME)
 		}
 
 		tcpAddr := &net.TCPAddr{
@@ -234,7 +251,7 @@ func connectToKik(clientConn net.Conn, sortedKTag string, interfaceIp *string) (
 		return nil, err
 	}
 	kikConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
-	kikConn.Write([]byte(sortedKTag))
+	kikConn.Write([]byte(payload.RawStanza))
 	kikResponse, err := readKFromKik(kikConn)
 	if err != nil {
 		return nil, err
