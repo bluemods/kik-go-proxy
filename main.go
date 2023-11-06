@@ -181,11 +181,7 @@ func handleNewConnection(clientConn net.Conn) {
 	proxy(kikConn, clientConn)
 }
 
-// For now, both methods simply copy
-// the packets to each others streams, making a blind proxy
-// (past the initial stream tags)
-
-func proxy(from net.Conn, to net.Conn) {
+/*func proxy(from net.Conn, to net.Conn) {
 	buf := make([]byte, SOCKET_BUFFER_SIZE)
 
 	defer from.Close()
@@ -197,6 +193,42 @@ func proxy(from net.Conn, to net.Conn) {
 			return
 		}
 		to.Write(buf[0:read])
+		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
+	}
+}*/
+
+func proxy(from net.Conn, to net.Conn) {
+	defer from.Close()
+	defer to.Close()
+
+	inputStream := createParser(from)
+	defer inputStream.Reader.ClearBuffer()
+
+	for {
+	    _, stanza, err := inputStream.readNextStanza()
+		// node, stanza, err := inputStream.readNextStanza()
+        // Here you can log the stanza, change the contents, etc
+        // before forwarding it on to the recipient
+
+		if err != nil {
+			errMessage := err.Error()
+
+			if strings.HasPrefix(errMessage, "XML syntax error") {
+				if strings.HasSuffix(errMessage, "unexpected end element </k>") {
+					// XML parser currently treats it like an error,
+					// send it manually before closing
+					to.Write([]byte("</k>"))
+				} else {
+					// Log unexpected XML parsing errors
+					log.Println(
+						"Unexpected XML parsing error:\n" +
+							err.Error() + "\nStanza:\n" + inputStream.Reader.GetBuffer())
+				}
+			}
+			return
+		}
+		// log.Println("Got " + *stanza)
+		to.Write([]byte(*stanza))
 		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 	}
 }
