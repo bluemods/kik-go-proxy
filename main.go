@@ -254,7 +254,16 @@ func handleNewConnection(clientConn net.Conn) {
 		}
 	}
 
-	log.Println("Accepting from " + ipAddress + ": " + k.RawStanza)
+	if jid, ok := k.Attributes["from"]; ok {
+		log.Printf("Accepting %s (IP: %s)\n", strings.Split(jid, "/")[0], ipAddress)
+	} else if deviceId, ok := k.Attributes["dev"]; ok {
+		log.Printf("Accepting pre-authenticated user %s (IP: %s)\n", deviceId, ipAddress)
+	} else {
+		log.Printf("%s is missing a from or dev attribute in initial stream tag\n", ipAddress)
+		clientConn.Close()
+		return
+	}
+
 	kikConn, err := connectToKik(clientConn, payload)
 	if err != nil {
 		log.Println("Failed to connect " + ipAddress + " to Kik: " + err.Error())
