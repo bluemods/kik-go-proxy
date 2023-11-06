@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"errors"
 	"flag"
 	"log"
 	"net"
+	"os"
+    "strings"
 	"time"
 )
 
@@ -23,24 +26,39 @@ const (
 
 	// Host from 15.59.x on Android. All of them resolve to the same IPs, but we will use a newer version anyway
 	KIK_HOST = "talk15590an.kik.com"
-	// Kik has 443 and 5223 open, both behave identically
+	// You can use port 443 or 5223 here, they behave the same
 	KIK_PORT = "443"
 	// Kik uses TCP
 	KIK_SERVER_TYPE = "tcp"
-	// Kik shouldn't take longer than 5s to respond. If it does, abort
+	// Abort if Kik takes longer than this to send back the initial response
 	KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
 
 	// The buffer size for the client and kik socket
 	SOCKET_BUFFER_SIZE = 8192
 
+	// TLSv1.3 is recommended.
+	// If you have clients that don't support 1.3,
+	// change to tls.VersionTLS12
+	SERVER_TLS_VERSION = tls.VersionTLS13
+
+	INTERFACE_NAME = "eth0"
+
 	CUSTOM_BANNER = false
 )
+
+var interfaceIps []string = make([]string, 0)
 
 func main() {
 	port := flag.String("port", "", "Port to listen for incoming connections on")
 	certFile := flag.String("cert", "", "certificate PEM file")
 	keyFile := flag.String("key", "", "key PEM file")
+	ipFile := flag.String("i", "", "file containing list of interface IPs, one per line")
 	flag.Parse()
+
+	err := parseInterfaceFile(*ipFile)
+	if err != nil {
+		log.Fatal("Failed parsing interface file:", err.Error())
+	}
 
 	if *certFile != "" && *keyFile != "" {
 		if *port == "" {
@@ -57,15 +75,31 @@ func main() {
 	}
 }
 
+func parseInterfaceFile(ipFile string) error {
+	file, err := os.Open(ipFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		ip := strings.Trim(scanner.Text(), " ")
+        log.Println("Adding interface IP " + ip)
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+    return nil
+}
+
 func openSSLServer(port string, certFile string, keyFile string) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		log.Fatal("Error loading key pair:", err.Error())
 	}
-	// Only accepting TLSv1.3 for now, as it's the most secure.
-	// All modern clients should support this.
-	// If it's an issue, change it to VersionTLS12
-	config := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13}
+	config := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: SERVER_TLS_VERSION}
 	server, err := tls.Listen(SERVER_TYPE, ":"+port, config)
 	if err != nil {
 		log.Fatal("Error opening SSL socket:", err.Error())
@@ -124,7 +158,7 @@ func handleNewConnection(clientConn net.Conn) {
 	}
 
 	log.Println("Accepting from " + ipAddress + ": " + k.RawStanza)
-	kikConn, err := connectToKik(clientConn, *payload, "" /* TODO */)
+	kikConn, err := connectToKik(clientConn, *payload, &k.InterfaceName)
 	if err != nil {
 		log.Println("Failed to connect " + ipAddress + " to Kik: " + err.Error())
 		clientConn.Close()
@@ -155,12 +189,12 @@ func proxy(from net.Conn, to net.Conn) {
 	}
 }
 
-func connectToKik(clientConn net.Conn, sortedKTag string, interfaceName string) (*tls.Conn, error) {
+func connectToKik(clientConn net.Conn, sortedKTag string, interfaceIp *string) (*tls.Conn, error) {
 	config := tls.Config{ServerName: KIK_HOST}
 
 	var dialer net.Dialer
-	if interfaceName != "" {
-		netInterface, err := net.InterfaceByName("eth0")
+	if interfaceIp != nil && *interfaceIp != "" {
+		netInterface, err := net.InterfaceByName(INTERFACE_NAME)
 		if err != nil {
 			return nil, err
 		}
@@ -173,13 +207,13 @@ func connectToKik(clientConn net.Conn, sortedKTag string, interfaceName string) 
 
 		for i := 0; i < len(addrs); i++ {
 			ip := addrs[i].(*net.IPNet).IP
-			if ip.String() == interfaceName {
+			if ip.String() == *interfaceIp {
 				selectedIP = ip
 				break
 			}
 		}
 		if selectedIP == nil {
-			return nil, errors.New("Failed connecting via custom interface; '" + interfaceName + "' not found")
+			return nil, errors.New("Failed connecting via custom interface; '" + *interfaceIp + "' not found in " + INTERFACE_NAME)
 		}
 
 		tcpAddr := &net.TCPAddr{

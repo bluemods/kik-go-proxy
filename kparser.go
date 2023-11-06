@@ -11,6 +11,8 @@ type InitialStreamTag struct {
 	Attributes      map[string]string
 	RawStanza       string
 	WhitespaceCount int
+	InterfaceName   string
+	ApiKey          string
 }
 
 /*
@@ -26,7 +28,24 @@ func (k InitialStreamTag) makeOutgoingPayload() (*string, error) {
 				"Expected: " + expected + "\nReceived: " + received)
 		return nil, err
 	}
-	return &expected, nil
+	var needsTransform bool = false
+
+	if iface, ok := k.Attributes["x-api-key"]; ok {
+		delete(k.Attributes, "x-interface")
+		needsTransform = true
+		k.InterfaceName = iface
+	}
+	if apiKey, ok := k.Attributes["x-api-key"]; ok {
+		delete(k.Attributes, "x-api-key")
+		needsTransform = true
+		k.ApiKey = apiKey
+	}
+	if needsTransform {
+		fixed := makeKTag(k.Attributes)
+		return &fixed, nil
+	} else {
+		return &expected, nil
+	}
 }
 
 type KikInitialStreamResponse struct {
