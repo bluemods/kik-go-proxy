@@ -7,9 +7,11 @@ The server listens on port 5222 for plain text connections by default, and 5223 
 The server connects to Kik via port 443 by default.
 
 Use cases for this include:
+- Validating stream headers (`<k ` tags) from clients
 - Intercepting / modifying packets
-- More stable connections to Kik
-- Debugging traffic from the official mobile clients (stock Kik)
+- Filtering incoming spam before it's sent to the client
+- Improved connection stability
+- Debugging traffic from the official mobile clients (stock Kik) or your custom client
 
 ## Requirements
 Go >= 1.21.3 (on *nix it can be easily installed [here](https://github.com/udhos/update-golang))
@@ -42,3 +44,4 @@ The socket currently only accepts clients that support TLSv1.3.
 - Log XMPP to file
 - Multiple interface routing
 - Automatically ban hosts that send invalid packets, like HTTP GET requests
+- Client authentication (via an API key in the stream header). Once authenticated, the client removes the key from the header, re-sorts the map, and sends it off to Kik.
