@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -195,24 +194,4 @@ func hashString(digestType int, data string) int32 {
 		return mangleBytes(hash)
 	}
 	panic("wtf")
-}
-
-/*
-Test if output is what's expected
-
-TODO move to seperate file
-*/
-func testMapSorting() {
-	testMap := make(map[string]string)
-	testMap["a"] = "a"
-	testMap["b"] = "b"
-	testMap["c"] = "c"
-	testMap["d"] = "d"
-	testMap["e"] = "e"
-	testMap["f"] = "f"
-	testMap["g"] = "g"
-	testMap["h"] = "h"
-
-	sorted := makeKTag(testMap)
-	fmt.Println("'" + sorted + "'")
 }

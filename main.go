@@ -2,13 +2,18 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -44,8 +49,23 @@ const (
 
 	INTERFACE_NAME = "eth0"
 
+	API_KEY_MIN_LENGTH = 32
+	API_KEY_MAX_LENGTH = 256
+
 	CUSTOM_BANNER = false
 )
+
+// If supplied as an argument, the API key must match this regex for the connection to proceed.
+// The server will strip this key before sending the stanza to Kik.
+// Example: <k from="some_user@talk.kik.com" x-api-key="YOUR_API_KEY">
+// You should randomly generate this string.
+// The character set is restricted to characters safe for XML attribute values.
+var API_KEY_PATTERN string = "^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$"
+
+var API_KEY_REGEX *regexp.Regexp = regexp.MustCompile(API_KEY_PATTERN)
+
+// We store this as a SHA-256 hash for security purposes.
+var currentHashedApiKey []byte = make([]byte, 0)
 
 var interfaceIps []string = make([]string, 0)
 
@@ -54,11 +74,16 @@ func main() {
 	certFile := flag.String("cert", "", "certificate PEM file")
 	keyFile := flag.String("key", "", "key PEM file")
 	ipFile := flag.String("i", "", "file containing list of interface IPs, one per line")
+	apiKeyFile := flag.String("a", "", "file containing the API key that all clients must authenticate with (using x-api-key attribute in <k header)")
 	flag.Parse()
 
-	err := parseInterfaceFile(*ipFile)
+	err := parseApiKeyFile(*apiKeyFile)
 	if err != nil {
-		log.Fatal("Failed parsing interface file:", err.Error())
+		log.Fatal("Failed parsing API key file: ", err.Error())
+	}
+	err = parseInterfaceFile(*ipFile)
+	if err != nil {
+		log.Fatal("Failed parsing interface file: ", err.Error())
 	}
 
 	if *certFile != "" && *keyFile != "" {
@@ -74,6 +99,42 @@ func main() {
 			openPlainServer(*port)
 		}
 	}
+}
+
+func parseApiKeyFile(apiKeyFile string) error {
+	if apiKeyFile == "" {
+		return nil
+	}
+	stat, err := os.Stat(apiKeyFile)
+
+	if err != nil {
+		return err
+	}
+	fileSize := stat.Size()
+	if fileSize > 1024 {
+		return errors.New(fmt.Sprintf(
+			"API key file %s is too large (%d > %d)", apiKeyFile, fileSize, 1024))
+	}
+
+	apiKeyBytes, err := os.ReadFile(apiKeyFile)
+	if err != nil {
+		return err
+	}
+	apiKey := strings.Trim(string(apiKeyBytes), " \r\n")
+	if !API_KEY_REGEX.MatchString(apiKey) {
+		return errors.New(fmt.Sprintf(
+			"API key in %s doesn't match regex `%s`", apiKey, API_KEY_PATTERN))
+	}
+	log.Printf("API key set (length=%d)\n", len(apiKey))
+	currentHashedApiKey = hashApiKey(apiKey)
+	return nil
+}
+
+func hashApiKey(key string) []byte {
+	hasher := sha256.New()
+	hasher.Write([]byte(key))
+	hash := hasher.Sum([]byte{})
+	return hash
 }
 
 func parseInterfaceFile(ipFile string) error {
@@ -168,6 +229,30 @@ func handleNewConnection(clientConn net.Conn) {
 		clientConn.Close()
 		return
 	}
+	if len(currentHashedApiKey) > 0 {
+		if len(payload.ApiKey) == 0 {
+			// TODO: ban hosts
+			log.Println(ipAddress + ": API key missing when required")
+			clientConn.Close()
+			return
+		}
+		if len(payload.ApiKey) < API_KEY_MIN_LENGTH || len(payload.ApiKey) > API_KEY_MAX_LENGTH {
+			// TODO: ban hosts
+			log.Println(ipAddress + ": Invalid API key length")
+			clientConn.Close()
+			return
+		}
+		userHashedApiKey := hashApiKey(payload.ApiKey)
+
+		// Constant time compare defends against timing attacks.
+		// Hashes always are the same length so ConstantTimeEq is unnecessary
+		if subtle.ConstantTimeCompare(userHashedApiKey, currentHashedApiKey) != 1 {
+			// TODO: ban hosts
+			log.Println(ipAddress + ": API key mismatch")
+			clientConn.Close()
+			return
+		}
+	}
 
 	log.Println("Accepting from " + ipAddress + ": " + k.RawStanza)
 	kikConn, err := connectToKik(clientConn, payload)
@@ -205,10 +290,10 @@ func proxy(from net.Conn, to net.Conn) {
 	defer inputStream.Reader.ClearBuffer()
 
 	for {
-	    _, stanza, err := inputStream.readNextStanza()
+		_, stanza, err := inputStream.readNextStanza()
 		// node, stanza, err := inputStream.readNextStanza()
-        // Here you can log the stanza, change the contents, etc
-        // before forwarding it on to the recipient
+		// Here you can log the stanza, change the contents, etc
+		// before forwarding it on to the recipient
 
 		if err != nil {
 			errMessage := err.Error()
