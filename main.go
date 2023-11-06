@@ -119,7 +119,7 @@ func handleNewConnection(clientConn net.Conn) {
 		clientConn.Close()
 		return
 	}
-	err = k.verify()
+	payload, err := k.makeOutgoingPayload()
 	if err != nil {
 		// TODO: ban hosts
 		fmt.Println("Failed validation " + ipAddress + ": " + fmt.Sprint(err))
@@ -128,7 +128,7 @@ func handleNewConnection(clientConn net.Conn) {
 	}
 
 	fmt.Println("Accepting from " + ipAddress + ": " + k.RawStanza)
-	kikConn, err := connectToKik(clientConn, k)
+	kikConn, err := connectToKik(clientConn, *payload)
 	if err != nil {
 		fmt.Println("Failed to connect " + ipAddress + " to Kik: " + fmt.Sprint(err))
 		clientConn.Close()
@@ -159,7 +159,7 @@ func proxy(from net.Conn, to net.Conn) {
 	}
 }
 
-func connectToKik(clientConn net.Conn, k *InitialStreamTag) (*tls.Conn, error) {
+func connectToKik(clientConn net.Conn, sortedKTag string) (*tls.Conn, error) {
 	var config tls.Config = tls.Config{ServerName: KIK_HOST}
 	dialer := net.Dialer{Timeout: KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second}
 	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, KIK_HOST+":"+KIK_PORT, &config)
@@ -167,7 +167,7 @@ func connectToKik(clientConn net.Conn, k *InitialStreamTag) (*tls.Conn, error) {
 		return nil, err
 	}
 	kikConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
-	kikConn.Write([]byte(k.RawStanza))
+	kikConn.Write([]byte(sortedKTag))
 	kikResponse, err := readKFromKik(kikConn)
 	if err != nil {
 		return nil, err

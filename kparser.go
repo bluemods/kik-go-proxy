@@ -17,15 +17,16 @@ type InitialStreamTag struct {
 Verifies the integrity of the stanza.
 if error returned is not nil, verification failed.
 */
-func (k InitialStreamTag) verify() error {
+func (k InitialStreamTag) makeOutgoingPayload() (*string, error) {
 	expected := makeKTag(k.Attributes)
 	received := k.RawStanza
 	if expected != received {
-		return errors.New(
-			"initial stream tag failed verification\n" + 
-			"Expected: " + expected + "\nReceived: " + received)
+		err := errors.New(
+			"initial stream tag failed verification\n" +
+				"Expected: " + expected + "\nReceived: " + received)
+		return nil, err
 	}
-	return nil
+	return &expected, nil
 }
 
 type KikInitialStreamResponse struct {
