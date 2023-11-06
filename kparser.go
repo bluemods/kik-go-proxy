@@ -30,7 +30,7 @@ func (k InitialStreamTag) makeOutgoingPayload() (*string, error) {
 	}
 	var needsTransform bool = false
 
-	if iface, ok := k.Attributes["x-api-key"]; ok {
+	if iface, ok := k.Attributes["x-interface"]; ok {
 		delete(k.Attributes, "x-interface")
 		needsTransform = true
 		k.InterfaceName = iface
