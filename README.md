@@ -26,7 +26,7 @@ go mod tidy && go build && ./kik-go-proxy
 ```
 
 ## Arguments
-If you use both -cert and -key, the program will use them to open an encrypted (SSL) connection.
+Note: If you use both -cert and -key, the program will use them to open an encrypted (SSL) connection.
 <br>
 The socket currently only accepts clients that support TLSv1.3.
 
@@ -35,13 +35,14 @@ The socket currently only accepts clients that support TLSv1.3.
 | -port    | Change the port that the server will listen for connections on. |
 | -cert    | The relative path to your X.509 certificate.                    |
 | -key     | The relative path to your certificate key.                      |
+| -i       | The relative path to your interface IP list, one per line       |
+| -iface   | The interface name to use, default is 'eth0'                    |
+| -a       | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header.                      |
 
 ## Notices
 - On Unix systems, you might get errors like ```Error accepting:  accept tcp4 0.0.0.0:5222: accept4: too many open files```.<br> If you do, try [raising the ulimit.](https://stackoverflow.com/a/32325509)
-- Since there is no current means of authentication, this is basically an open proxy server to Kik. If running this on a public facing server, make sure to configure your firewall to only allow trusted IPs.
+- If running this on a public facing server without the -a argument, it is an open proxy. Make sure to configure your firewall to only allow trusted IPs.
 
 ## TODOs
 - Log XMPP to file
-- Multiple interface routing
 - Automatically ban hosts that send invalid packets, like HTTP GET requests
-- Client authentication (via an API key in the stream header). Once authenticated, the client removes the key from the header, re-sorts the map, and sends it off to Kik.
