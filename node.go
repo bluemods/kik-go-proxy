@@ -1,12 +1,13 @@
 package main
 
 import (
-  "bufio"
+	"bufio"
 	"errors"
 	"io"
 	"net"
 	"strings"
-	"github.com/mmcdole/goxpp"
+
+	xpp "github.com/mmcdole/goxpp"
 )
 
 type Node struct {
@@ -18,8 +19,8 @@ type Node struct {
 
 func parse(parser *xpp.XMLPullParser) (*Node, error) {
 	if parser.Event != xpp.StartTag {
-        return nil, errors.New("Expected start tag")
-    }
+		return nil, errors.New("Expected start tag")
+	}
 	var ret = new(Node)
 	ret.Text = ""
 	ret.Name = parser.Name
@@ -31,7 +32,7 @@ func parse(parser *xpp.XMLPullParser) (*Node, error) {
 	for {
 		eventType, err := parser.Next()
 		if err != nil {
-        	return nil, err
+			return nil, err
 		} else if eventType == xpp.StartTag {
 			child, err := parse(parser)
 			if err != nil {
@@ -44,27 +45,26 @@ func parse(parser *xpp.XMLPullParser) (*Node, error) {
 			return ret, nil
 		}
 	}
-	return ret, nil
 }
 
 /*
-	Parse an XMPP string
-	Since initial k tags are not always closed (as they are a stream header)
-	we must manually close them to make the parser work.
+Parse an XMPP string
+Since initial k tags are not always closed (as they are a stream header)
+we must manually close them to make the parser work.
 
-	This limitation may be revisited later.
+This limitation may be revisited later.
 */
 func parseInitialKString(xmpp string) (*Node, error) {
 	fixed := strings.Trim(strings.TrimSuffix(xmpp, "</k>"), " ") + "</k>"
 	if !strings.HasPrefix(fixed, "<k ") {
-	    return nil, errors.New("Not a valid k tag\n" + xmpp)
+		return nil, errors.New("Not a valid k tag\n" + xmpp)
 	}
 	return parseXmppString(fixed)
 }
 
 /*
-	Parse an XMPP string
-	Note that this will return an error if all tags are not properly closed.
+Parse an XMPP string
+Note that this will return an error if all tags are not properly closed.
 */
 func parseXmppString(xmpp string) (*Node, error) {
 	reader := strings.NewReader(xmpp)
@@ -77,9 +77,9 @@ func parseXmppString(xmpp string) (*Node, error) {
 }
 
 /*
-	Create a XMLPullParser for a long-lived input stream.
+Create a XMLPullParser for a long-lived input stream.
 */
-func createParser(connection net.Conn) (*xpp.XMLPullParser) {
+func createParser(connection net.Conn) *xpp.XMLPullParser {
 	reader := bufio.NewReader(connection)
 	crReader := func(charset string, input io.Reader) (io.Reader, error) {
 		return input, nil
