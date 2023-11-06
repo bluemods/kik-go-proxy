@@ -47,7 +47,7 @@ const (
 	// change to tls.VersionTLS12
 	SERVER_TLS_VERSION = tls.VersionTLS13
 
-	INTERFACE_NAME = "eth0"
+	DEFAULT_INTERFACE_NAME = "eth0"
 
 	API_KEY_MIN_LENGTH = 32
 	API_KEY_MAX_LENGTH = 256
@@ -68,15 +68,21 @@ var API_KEY_REGEX *regexp.Regexp = regexp.MustCompile(API_KEY_PATTERN)
 var currentHashedApiKey []byte = make([]byte, 0)
 
 var interfaceIps []string = make([]string, 0)
+var interfaceName = DEFAULT_INTERFACE_NAME
 
 func main() {
 	port := flag.String("port", "", "Port to listen for incoming connections on")
 	certFile := flag.String("cert", "", "certificate PEM file")
 	keyFile := flag.String("key", "", "key PEM file")
 	ipFile := flag.String("i", "", "file containing list of interface IPs, one per line")
+	iname := flag.String("iname", "", "the interface name to use, only meaningful with -i. Defaults to eth0")
 	apiKeyFile := flag.String("a", "", "file containing the API key that all clients must authenticate with (using x-api-key attribute in <k header)")
 	flag.Parse()
 
+	if *iname != "" {
+		log.Println("Using custom interface name " + *iname)
+		interfaceName = *iname
+	}
 	err := parseApiKeyFile(*apiKeyFile)
 	if err != nil {
 		log.Fatal("Failed parsing API key file: ", err.Error())
@@ -331,15 +337,24 @@ func connectToKik(clientConn net.Conn, payload *OutgoingKPayload) (*tls.Conn, er
 	config := tls.Config{ServerName: KIK_HOST}
 
 	var dialer net.Dialer
-	if payload.InterfaceName != "" {
-		if !slices.Contains(interfaceIps, payload.InterfaceName) {
+	if payload.InterfaceIp != "" {
+		if !slices.Contains(interfaceIps, payload.InterfaceIp) {
 			err := errors.New("Client requested to use unknown interface " +
-				payload.InterfaceName + ", aborting connection")
+				payload.InterfaceIp + ", aborting connection")
 			return nil, err
 		}
-		netInterface, err := net.InterfaceByName(INTERFACE_NAME)
+		netInterface, err := net.InterfaceByName(interfaceName)
 		if err != nil {
-			return nil, err
+			ifaces, netErr := net.Interfaces()
+			if netErr != nil {
+				return nil, netErr
+			} else {
+				msg := "Missing interface, we can select from: "
+				for _, s := range ifaces {
+					msg += s.Name + ","
+				}
+				return nil, errors.New(msg + " | " + err.Error())
+			}
 		}
 		addrs, err := netInterface.Addrs()
 		if err != nil {
@@ -350,13 +365,13 @@ func connectToKik(clientConn net.Conn, payload *OutgoingKPayload) (*tls.Conn, er
 
 		for i := 0; i < len(addrs); i++ {
 			ip := addrs[i].(*net.IPNet).IP
-			if ip.String() == payload.InterfaceName {
+			if ip.String() == payload.InterfaceIp {
 				selectedIP = ip
 				break
 			}
 		}
 		if selectedIP == nil {
-			return nil, errors.New("Failed connecting via custom interface; '" + payload.InterfaceName + "' not found in " + INTERFACE_NAME)
+			return nil, errors.New("Failed connecting via custom interface; '" + payload.InterfaceIp + "' not found in " + interfaceName)
 		}
 
 		tcpAddr := &net.TCPAddr{

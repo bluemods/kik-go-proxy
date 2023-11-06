@@ -14,9 +14,9 @@ type InitialStreamTag struct {
 }
 
 type OutgoingKPayload struct {
-	RawStanza     string
-	InterfaceName string
-	ApiKey        string
+	RawStanza   string
+	InterfaceIp string
+	ApiKey      string
 }
 
 /*
@@ -51,9 +51,9 @@ func (k InitialStreamTag) makeOutgoingPayload() (*OutgoingKPayload, error) {
 		expected = makeKTag(k.Attributes)
 	}
 	return &OutgoingKPayload{
-		RawStanza:     expected,
-		InterfaceName: iface,
-		ApiKey:        apiKey,
+		RawStanza:   expected,
+		InterfaceIp: iface,
+		ApiKey:      apiKey,
 	}, nil
 }
 
