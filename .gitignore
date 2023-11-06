@@ -7,6 +7,12 @@ kik-go-proxy*
 *.so
 *.dylib
 
+# Certs
+*.key
+*.pem
+*.crt
+*.p12
+
 # Test binary, built with `go test -c`
 *.test
 
