@@ -327,7 +327,6 @@ func proxy(from net.Conn, to net.Conn) {
 			}
 			return
 		}
-		// log.Println("Got " + *stanza)
 		to.Write([]byte(*stanza))
 		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 	}
