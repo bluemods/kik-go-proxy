@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 /*
 Test if output is what's expected
 
@@ -18,6 +16,6 @@ func testMapSorting() {
 	testMap["g"] = "g"
 	testMap["h"] = "h"
 
-	sorted := makeKTag(testMap)
-	fmt.Println("'" + sorted + "'")
+	// sorted := makeKTag(testMap)
+	// fmt.Println("'" + sorted + "'")
 }

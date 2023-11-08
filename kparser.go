@@ -3,8 +3,11 @@ package main
 import (
 	"errors"
 	"net"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bluemods/kik-go-proxy/crypto"
 )
 
 type InitialStreamTag struct {
@@ -24,7 +27,7 @@ Verifies the integrity of the stanza.
 if error returned is not nil, verification failed.
 */
 func (k InitialStreamTag) makeOutgoingPayload() (*OutgoingKPayload, error) {
-	expected := makeKTag(k.Attributes)
+	expected := crypto.MakeKTag(k.Attributes)
 	received := k.RawStanza
 	if expected != received {
 		err := errors.New(
@@ -48,7 +51,7 @@ func (k InitialStreamTag) makeOutgoingPayload() (*OutgoingKPayload, error) {
 		needsTransform = true
 	}
 	if needsTransform {
-		expected = makeKTag(k.Attributes)
+		expected = crypto.MakeKTag(k.Attributes)
 	}
 	return &OutgoingKPayload{
 		RawStanza:   expected,
@@ -165,6 +168,13 @@ func readKFromKik(kikConn net.Conn) (*KikInitialStreamResponse, error) {
 	k, err := parseInitialKString(stanza)
 	if err != nil {
 		return nil, err
+	}
+
+	if v, ok := k.Attributes["ts"]; ok {
+		timestamp, _ := strconv.ParseInt(v, 10, 64)
+		if timestamp > 0 {
+			crypto.SetServerTimeOffset(timestamp - time.Now().UnixMilli())
+		}
 	}
 
 	return &KikInitialStreamResponse{

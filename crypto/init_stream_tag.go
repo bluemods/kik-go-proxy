@@ -1,10 +1,9 @@
-package main
+package crypto
 
 import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -25,7 +24,7 @@ type SortingMode struct {
 /*
 Makes a 'k' tag, including correct spaces and order.
 */
-func makeKTag(attrs map[string]string) string {
+func MakeKTag(attrs map[string]string) string {
 	BaseOrdering := &SortingMode{Base: -310256979, Offset: 13}
 	ExtendedOrdering := &SortingMode{Base: -1964139357, Offset: 7}
 
