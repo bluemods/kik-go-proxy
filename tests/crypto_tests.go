@@ -2,8 +2,6 @@ package main
 
 /*
 Test if output is what's expected
-
-TODO move to seperate file
 */
 func testMapSorting() {
 	testMap := make(map[string]string)

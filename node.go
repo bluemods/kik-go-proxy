@@ -17,7 +17,9 @@ type Node struct {
 	Text       string
 }
 
-func parse(parser *xpp.XMLPullParser) (*Node, error) {
+// Reads the next Node from the XMLPull Parser.
+// Parser must be positioned on a StartTag.
+func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 	if parser.Event != xpp.StartTag {
 		return nil, errors.New("Expected start tag")
 	}
@@ -34,7 +36,7 @@ func parse(parser *xpp.XMLPullParser) (*Node, error) {
 		if err != nil {
 			return nil, err
 		} else if eventType == xpp.StartTag {
-			child, err := parse(parser)
+			child, err := ParseNextNode(parser)
 			if err != nil {
 				return nil, err
 			}
@@ -47,38 +49,32 @@ func parse(parser *xpp.XMLPullParser) (*Node, error) {
 	}
 }
 
-/*
-Parse an XMPP string
-Since initial k tags are not always closed (as they are a stream header)
-we must manually close them to make the parser work.
-
-This limitation may be revisited later.
-*/
-func parseInitialKString(xmpp string) (*Node, error) {
+// Parse a <k/> string
+// Since initial k tags are not always closed (as they are a stream header)
+// we must manually close them to make the parser work.
+//
+// This limitation may be revisited later.
+func ParseInitialKString(xmpp string) (*Node, error) {
 	fixed := strings.Trim(strings.TrimSuffix(xmpp, "</k>"), " ") + "</k>"
 	if !strings.HasPrefix(fixed, "<k ") {
 		return nil, errors.New("Not a valid k tag\n" + xmpp)
 	}
-	return parseXmppString(fixed)
+	return ParseXmppString(fixed)
 }
 
-/*
-Parse an XMPP string
-Note that this will return an error if all tags are not properly closed.
-*/
-func parseXmppString(xmpp string) (*Node, error) {
+// Parse an XMPP string
+// Note that this will return an error if all tags are not properly closed.
+func ParseXmppString(xmpp string) (*Node, error) {
 	reader := strings.NewReader(xmpp)
 	crReader := func(charset string, input io.Reader) (io.Reader, error) {
 		return input, nil
 	}
 	parser := xpp.NewXMLPullParser(reader, false, crReader)
 	parser.Next()
-	return parse(parser)
+	return ParseNextNode(parser)
 }
 
-/*
-Sits on top of the real reader so we can log the raw XMPP
-*/
+// Sits on top of the real reader so we can log the raw XMPP
 type LoggingBufferedReader struct {
 	r      io.Reader
 	Buffer *strings.Builder
@@ -107,15 +103,13 @@ type NodeInputStream struct {
 	Parser xpp.XMLPullParser
 }
 
-/*
-Read the next stanza from the input stream.
-
-If an error is encountered, node and string will be nil.
-
-If successful, the node object and the raw stanza
-will be returned in the first two values.
-*/
-func (input NodeInputStream) readNextStanza() (*Node, *string, error) {
+// Read the next stanza from the input stream.
+//
+// If an error is encountered, node and string will be nil.
+//
+// If successful, the node object and the raw stanza
+// will be returned in the first two values.
+func (input NodeInputStream) ReadNextStanza() (*Node, *string, error) {
 	parser := input.Parser
 	for {
 		eventType, err := parser.Next()
@@ -129,7 +123,7 @@ func (input NodeInputStream) readNextStanza() (*Node, *string, error) {
 			}
 		}
 		if eventType == xpp.StartTag {
-			node, err := parse(&parser)
+			node, err := ParseNextNode(&parser)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -139,10 +133,8 @@ func (input NodeInputStream) readNextStanza() (*Node, *string, error) {
 	}
 }
 
-/*
-Create a XMLPullParser for a long-lived input stream.
-*/
-func createParser(connection net.Conn) NodeInputStream {
+// Create a XMLPullParser for a long-lived input stream.
+func CreateNodeInputStream(connection net.Conn) NodeInputStream {
 	realReader := bufio.NewReader(connection)
 	loggingReader := LoggingBufferedReader{
 		r:      realReader,

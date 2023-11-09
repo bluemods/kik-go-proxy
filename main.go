@@ -55,20 +55,18 @@ const (
 	CUSTOM_BANNER = false
 )
 
-// If supplied as an argument, the API key must match this regex for the connection to proceed.
-// The server will strip this key before sending the stanza to Kik.
-// Example: <k from="some_user@talk.kik.com" x-api-key="YOUR_API_KEY">
-// You should randomly generate this string.
-// The character set is restricted to characters safe for XML attribute values.
-var API_KEY_PATTERN string = "^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$"
+var (
+	API_KEY_PATTERN string         = "^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$"
+	API_KEY_REGEX   *regexp.Regexp = regexp.MustCompile(API_KEY_PATTERN)
 
-var API_KEY_REGEX *regexp.Regexp = regexp.MustCompile(API_KEY_PATTERN)
+	// We store this as a SHA-256 hash for security purposes.
+	// You can start the server, delete the file,
+	// then the API key should be unrecoverable from the program
+	currentHashedApiKey []byte = make([]byte, 0)
 
-// We store this as a SHA-256 hash for security purposes.
-var currentHashedApiKey []byte = make([]byte, 0)
-
-var interfaceIps []string = make([]string, 0)
-var interfaceName = DEFAULT_INTERFACE_NAME
+	interfaceIps  []string = make([]string, 0)
+	interfaceName          = DEFAULT_INTERFACE_NAME
+)
 
 func main() {
 	port := flag.String("port", "", "Port to listen for incoming connections on")
@@ -139,7 +137,7 @@ func parseApiKeyFile(apiKeyFile string) error {
 func hashApiKey(key string) []byte {
 	hasher := sha256.New()
 	hasher.Write([]byte(key))
-	hash := hasher.Sum([]byte{})
+	hash := hasher.Sum(nil)
 	return hash
 }
 
@@ -221,30 +219,33 @@ func handleNewConnection(clientConn net.Conn) {
 		return
 	}
 
-	k, err := readKFromClient(clientConn)
+	clientConn.SetReadDeadline(time.Now().Add(CLIENT_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+	k, err := ParseInitialStreamTag(clientConn)
+	clientConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
+
 	if err != nil {
-		// TODO: ban hosts
+		BanHost(ipAddress)
 		log.Println("Rejecting from " + ipAddress + ": " + err.Error())
 		clientConn.Close()
 		return
 	}
 	payload, err := k.makeOutgoingPayload()
 	if err != nil {
-		// TODO: ban hosts
 		log.Println("Failed validation " + ipAddress + ": " + err.Error())
+		BanHost(ipAddress)
 		clientConn.Close()
 		return
 	}
-	if len(currentHashedApiKey) > 0 {
+	if !isExempted(k) && len(currentHashedApiKey) > 0 {
 		if len(payload.ApiKey) == 0 {
-			// TODO: ban hosts
 			log.Println(ipAddress + ": API key missing when required")
+			BanHost(ipAddress)
 			clientConn.Close()
 			return
 		}
 		if len(payload.ApiKey) < API_KEY_MIN_LENGTH || len(payload.ApiKey) > API_KEY_MAX_LENGTH {
-			// TODO: ban hosts
 			log.Println(ipAddress + ": Invalid API key length")
+			BanHost(ipAddress)
 			clientConn.Close()
 			return
 		}
@@ -253,22 +254,14 @@ func handleNewConnection(clientConn net.Conn) {
 		// Constant time compare defends against timing attacks.
 		// Hashes always are the same length so ConstantTimeEq is unnecessary
 		if subtle.ConstantTimeCompare(userHashedApiKey, currentHashedApiKey) != 1 {
-			// TODO: ban hosts
 			log.Println(ipAddress + ": API key mismatch")
+			BanHost(ipAddress)
 			clientConn.Close()
 			return
 		}
 	}
 
-	if jid, ok := k.Attributes["from"]; ok {
-		log.Printf("Accepting %s (IP: %s)\n", strings.Split(jid, "/")[0], ipAddress)
-	} else if deviceId, ok := k.Attributes["dev"]; ok {
-		log.Printf("Accepting pre-authenticated user %s (IP: %s)\n", deviceId, ipAddress)
-	} else {
-		log.Printf("%s is missing a from or dev attribute in initial stream tag\n", ipAddress)
-		clientConn.Close()
-		return
-	}
+	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ipAddress)
 
 	kikConn, err := connectToKik(clientConn, payload)
 	if err != nil {
@@ -277,36 +270,29 @@ func handleNewConnection(clientConn net.Conn) {
 		return
 	}
 
-	go proxy(clientConn, kikConn)
-	proxy(kikConn, clientConn)
+	defer clientConn.Close()
+	defer kikConn.Close()
+
+	go proxy(kikConn, clientConn)
+	proxy(clientConn, kikConn)
 }
 
-/*func proxy(from net.Conn, to net.Conn) {
-	buf := make([]byte, SOCKET_BUFFER_SIZE)
+func BanHost(ipAddress string) {
+	// TODO ban hosts
+}
 
-	defer from.Close()
-	defer to.Close()
-
-	for {
-		read, err := from.Read(buf)
-		if err != nil {
-			return
-		}
-		to.Write(buf[0:read])
-		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
-	}
-}*/
+func isExempted(k *InitialStreamTag) bool {
+	// You can add exemptions to API key rule here
+	return false
+}
 
 func proxy(from net.Conn, to net.Conn) {
-	defer from.Close()
-	defer to.Close()
-
-	inputStream := createParser(from)
+	inputStream := CreateNodeInputStream(from)
 	defer inputStream.Reader.ClearBuffer()
 
 	for {
-		_, stanza, err := inputStream.readNextStanza()
-		// node, stanza, err := inputStream.readNextStanza()
+		_, stanza, err := inputStream.ReadNextStanza()
+		// node, stanza, err := inputStream.ReadNextStanza()
 		// Here you can log the stanza, change the contents, etc
 		// before forwarding it on to the recipient
 
@@ -315,8 +301,8 @@ func proxy(from net.Conn, to net.Conn) {
 
 			if strings.HasPrefix(errMessage, "XML syntax error") {
 				if strings.HasSuffix(errMessage, "unexpected end element </k>") {
-					// XML parser currently treats it like an error,
-					// send it manually before closing
+					// XML parser currently treats it like an error.
+					// Send it manually to properly close connection
 					to.Write([]byte("</k>"))
 				} else {
 					// Log unexpected XML parsing errors
@@ -390,13 +376,13 @@ func connectToKik(clientConn net.Conn, payload *OutgoingKPayload) (*tls.Conn, er
 	if err != nil {
 		return nil, err
 	}
-	kikConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 	kikConn.Write([]byte(payload.RawStanza))
-	kikResponse, err := readKFromKik(kikConn)
+	kikConn.SetReadDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+	kikResponse, err := ParseInitialStreamResponse(kikConn)
 	if err != nil {
 		return nil, err
 	}
-	clientConn.Write([]byte(kikResponse.generateServerResponse()))
+	clientConn.Write([]byte(kikResponse.GenerateServerResponse()))
 	if !kikResponse.IsOk {
 		return nil, errors.New("Kik rejected bind: " + kikResponse.RawStanza)
 	}
