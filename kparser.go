@@ -102,7 +102,7 @@ func (k InitialStreamTag) GetUserId() string {
 Verifies the integrity of the stanza.
 if error returned is not nil, verification failed.
 */
-func (k InitialStreamTag) makeOutgoingPayload() (*OutgoingKPayload, error) {
+func (k InitialStreamTag) MakeOutgoingPayload() (*OutgoingKPayload, error) {
 	expected := crypto.MakeKTag(k.Attributes)
 	received := k.RawStanza
 	if expected != received {
@@ -136,7 +136,11 @@ func (k InitialStreamTag) makeOutgoingPayload() (*OutgoingKPayload, error) {
 	}, nil
 }
 
-func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, error) {
+// Parses the initial stream tag from the client.
+// If the error returned is nil, the parsing succeeded,
+// and the other return values must be ignored.
+// Returns: InitialStreamTag, shouldBanIp, error
+func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	var startTagSeen bool = false
 	var whitespaceCount int = 0
 	var characterCount int = 0
@@ -147,25 +151,36 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, error) {
 	for {
 		_, err := conn.Read(buf)
 		if err != nil {
-			return nil, err
+			bannableOffenses := [2]string{
+				"tls: client offered only unsupported versions:",
+				"tls: first record does not look like a TLS handshake",
+			}
+
+			errMessage := err.Error()
+			for _, offense := range bannableOffenses {
+				if strings.Contains(errMessage, offense) {
+					return nil, true, err
+				}
+			}
+			return nil, false, err
 		}
 		var c = buf[0]
 		stanza.WriteByte(c)
 
 		characterCount++
 		if characterCount > 1024 {
-			return nil, errors.New("Too many characters in stream init tag\n" + stanza.String())
+			return nil, true, errors.New("Too many characters in stream init tag\n" + stanza.String())
 		}
 
 		if !startTagSeen {
 			if c == '<' {
 				startTagSeen = true
 			} else if c != ' ' {
-				return nil, errors.New("invalid character '" + string(c) + "' before tag start")
+				return nil, true, errors.New("invalid character '" + string(c) + "' before tag start")
 			} else {
 				whitespaceCount++
 				if whitespaceCount > 29 {
-					return nil, errors.New("Too many whitespaces before tag start\n" + stanza.String())
+					return nil, true, errors.New("Too many whitespaces before tag start\n" + stanza.String())
 				}
 			}
 		} else {
@@ -180,16 +195,16 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, error) {
 				c == '/' || c == '_' ||
 				c == '&' || c == ';' ||
 				c == '-' || c == '+' || c == ':') {
-				return nil, errors.New("invalid character '" + string(c) + "' in stream init tag\n" + stanza.String())
+				return nil, true, errors.New("invalid character '" + string(c) + "' in stream init tag\n" + stanza.String())
 			}
 		}
 	}
 	if strings.HasSuffix(stanza.String(), "/>") {
-		return nil, errors.New("initial stream tag already closed\n" + stanza.String())
+		return nil, true, errors.New("initial stream tag already closed\n" + stanza.String())
 	}
 	node, err := ParseInitialKString(stanza.String())
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 
 	var attributes map[string]string = node.Attributes
@@ -199,12 +214,12 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, error) {
 
 		dev, ok := attributes["dev"]
 		if !ok {
-			return nil, errors.New("No dev attribute in anon stanza")
+			return nil, true, errors.New("No dev attribute in anon stanza")
 		}
 
 		deviceId, err := ParseDeviceId(dev)
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 
 		return &InitialStreamTag{
@@ -213,17 +228,17 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, error) {
 			IsAuth:     false,
 			Jid:        nil,
 			DeviceId:   *deviceId,
-		}, nil
+		}, false, nil
 	} else {
 		// This is an authorized connection (post-auth)
 
 		from, ok := attributes["from"]
 		if !ok {
-			return nil, errors.New("No from attribute in auth stanza")
+			return nil, true, errors.New("No from attribute in auth stanza")
 		}
 		jid, err := ParseFullJid(from)
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 		return &InitialStreamTag{
 			Attributes: attributes,
@@ -231,7 +246,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, error) {
 			IsAuth:     true,
 			Jid:        jid,
 			DeviceId:   jid.DeviceId,
-		}, nil
+		}, false, nil
 	}
 }
 
@@ -291,7 +306,7 @@ func ParseInitialStreamResponse(kikConn net.Conn) (*KikInitialStreamResponse, er
 	}
 
 	var isOk bool = k.Attributes["ok"] == "1"
-	
+
 	if v, ok := k.Attributes["ts"]; ok {
 		timestamp, _ := strconv.ParseInt(v, 10, 64)
 		if timestamp > 0 {

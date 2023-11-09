@@ -37,7 +37,8 @@ The socket currently only accepts clients that support TLSv1.3.
 | -key     | The relative path to your certificate key.                      |
 | -i       | The relative path to your interface IP list, one per line       |
 | -iface   | The interface name to use, default is 'eth0'                    |
-| -a       | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header.                      |
+| -a       | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header. |
+| -ban     | If specified, misbehaving clients will be IP banned from the server using iptables |
 
 ## Notices
 - On Unix systems, you might get errors like ```Error accepting:  accept tcp4 0.0.0.0:5222: accept4: too many open files```.<br> If you do, try [raising the ulimit.](https://stackoverflow.com/a/32325509)
@@ -45,4 +46,3 @@ The socket currently only accepts clients that support TLSv1.3.
 
 ## TODOs
 - Log XMPP to file
-- Automatically ban hosts that send invalid packets, like HTTP GET requests

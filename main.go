@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strconv"
@@ -39,9 +40,6 @@ const (
 	// Abort if Kik takes longer than this to send back the initial response
 	KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
 
-	// The buffer size for the client and kik socket
-	SOCKET_BUFFER_SIZE = 8192
-
 	// TLSv1.3 is recommended.
 	// If you have clients that don't support 1.3,
 	// change to tls.VersionTLS12
@@ -58,6 +56,11 @@ const (
 var (
 	API_KEY_PATTERN string         = "^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$"
 	API_KEY_REGEX   *regexp.Regexp = regexp.MustCompile(API_KEY_PATTERN)
+	IPV4_REGEX      *regexp.Regexp = regexp.MustCompile(
+		`^((25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9])\.` +
+			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
+			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
+			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[0-9]))"$`)
 
 	// We store this as a SHA-256 hash for security purposes.
 	// You can start the server, delete the file,
@@ -65,7 +68,9 @@ var (
 	currentHashedApiKey []byte = make([]byte, 0)
 
 	interfaceIps  []string = make([]string, 0)
-	interfaceName          = DEFAULT_INTERFACE_NAME
+	interfaceName string   = DEFAULT_INTERFACE_NAME
+
+	autoBanHosts bool = false
 )
 
 func main() {
@@ -75,7 +80,10 @@ func main() {
 	ipFile := flag.String("i", "", "file containing list of interface IPs, one per line")
 	iname := flag.String("iname", "", "the interface name to use, only meaningful with -i. Defaults to eth0")
 	apiKeyFile := flag.String("a", "", "file containing the API key that all clients must authenticate with (using x-api-key attribute in <k header)")
+	banHosts := flag.Bool("ban", false, "if true, misbehaving clients are IP banned from the server using iptables")
 	flag.Parse()
+
+	autoBanHosts = *banHosts
 
 	if *iname != "" {
 		log.Println("Using custom interface name " + *iname)
@@ -220,16 +228,18 @@ func handleNewConnection(clientConn net.Conn) {
 	}
 
 	clientConn.SetReadDeadline(time.Now().Add(CLIENT_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
-	k, err := ParseInitialStreamTag(clientConn)
+	k, shouldBan, err := ParseInitialStreamTag(clientConn)
 	clientConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 
 	if err != nil {
-		BanHost(ipAddress)
+		if shouldBan {
+			BanHost(ipAddress)
+		}
 		log.Println("Rejecting from " + ipAddress + ": " + err.Error())
 		clientConn.Close()
 		return
 	}
-	payload, err := k.makeOutgoingPayload()
+	payload, err := k.MakeOutgoingPayload()
 	if err != nil {
 		log.Println("Failed validation " + ipAddress + ": " + err.Error())
 		BanHost(ipAddress)
@@ -278,7 +288,22 @@ func handleNewConnection(clientConn net.Conn) {
 }
 
 func BanHost(ipAddress string) {
-	// TODO ban hosts
+	if !autoBanHosts {
+		return
+	}
+	if !IPV4_REGEX.MatchString(ipAddress) {
+		// This is ultra defensive programming
+		// to make sure no bad values can be passed to the command
+		log.Printf("Can't ban IP %s; doesn't match IPV4 regex", ipAddress)
+		return
+	}
+	command := exec.Command("iptables", "-A", "INPUT", "-s", ipAddress, "-j", "DROP")
+	stdout, err := command.Output()
+	if err != nil {
+		log.Println("Failed to ban " + ipAddress + ": " + err.Error())
+	} else {
+		log.Println("Banned " + ipAddress + ": " + string(stdout))
+	}
 }
 
 func isExempted(k *InitialStreamTag) bool {
