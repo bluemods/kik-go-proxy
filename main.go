@@ -219,11 +219,12 @@ func openPlainServer(port string) {
 }
 
 func handleNewConnection(clientConn net.Conn) {
+	defer clientConn.Close()
+
 	ipAddress, _, err := net.SplitHostPort(clientConn.RemoteAddr().String())
 	if err != nil {
 		// Shouldn't happen but being safe
 		log.Println("Rejecting connection, could not parse remote IP address")
-		clientConn.Close()
 		return
 	}
 
@@ -236,27 +237,23 @@ func handleNewConnection(clientConn net.Conn) {
 			BanHost(ipAddress)
 		}
 		log.Println("Rejecting from " + ipAddress + ": " + err.Error())
-		clientConn.Close()
 		return
 	}
 	payload, err := k.MakeOutgoingPayload()
 	if err != nil {
 		log.Println("Failed validation " + ipAddress + ": " + err.Error())
 		BanHost(ipAddress)
-		clientConn.Close()
 		return
 	}
 	if !isExempted(k) && len(currentHashedApiKey) > 0 {
 		if len(payload.ApiKey) == 0 {
 			log.Println(ipAddress + ": API key missing when required")
 			BanHost(ipAddress)
-			clientConn.Close()
 			return
 		}
 		if len(payload.ApiKey) < API_KEY_MIN_LENGTH || len(payload.ApiKey) > API_KEY_MAX_LENGTH {
 			log.Println(ipAddress + ": Invalid API key length")
 			BanHost(ipAddress)
-			clientConn.Close()
 			return
 		}
 		userHashedApiKey := hashApiKey(payload.ApiKey)
@@ -266,7 +263,6 @@ func handleNewConnection(clientConn net.Conn) {
 		if subtle.ConstantTimeCompare(userHashedApiKey, currentHashedApiKey) != 1 {
 			log.Println(ipAddress + ": API key mismatch")
 			BanHost(ipAddress)
-			clientConn.Close()
 			return
 		}
 	}
@@ -276,11 +272,9 @@ func handleNewConnection(clientConn net.Conn) {
 	kikConn, err := connectToKik(clientConn, payload)
 	if err != nil {
 		log.Println("Failed to connect " + ipAddress + " to Kik: " + err.Error())
-		clientConn.Close()
 		return
 	}
 
-	defer clientConn.Close()
 	defer kikConn.Close()
 
 	go proxy(kikConn, clientConn)
