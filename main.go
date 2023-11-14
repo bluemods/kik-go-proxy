@@ -71,6 +71,7 @@ var (
 	interfaceName string   = DEFAULT_INTERFACE_NAME
 
 	autoBanHosts bool = false
+	antiSpam     bool = false
 )
 
 func main() {
@@ -81,9 +82,11 @@ func main() {
 	iname := flag.String("iname", "", "the interface name to use, only meaningful with -i. Defaults to eth0")
 	apiKeyFile := flag.String("a", "", "file containing the API key that all clients must authenticate with (using x-api-key attribute in <k header)")
 	banHosts := flag.Bool("ban", false, "if true, misbehaving clients are IP banned from the server using iptables")
+	antiSpamFlag := flag.Bool("spam", false, "if true, incoming spam will be intercepted and blocked")
 	flag.Parse()
 
 	autoBanHosts = *banHosts
+	antiSpam = *antiSpamFlag
 
 	if *iname != "" {
 		log.Println("Using custom interface name " + *iname)
@@ -277,8 +280,8 @@ func handleNewConnection(clientConn net.Conn) {
 
 	defer kikConn.Close()
 
-	go proxy(kikConn, clientConn)
-	proxy(clientConn, kikConn)
+	go proxy(false, kikConn, clientConn)
+	proxy(true, clientConn, kikConn)
 }
 
 func BanHost(ipAddress string) {
@@ -305,17 +308,22 @@ func isExempted(k *InitialStreamTag) bool {
 	return false
 }
 
-func proxy(from net.Conn, to net.Conn) {
+func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
 	inputStream := CreateNodeInputStream(from)
 	defer inputStream.Reader.ClearBuffer()
 
+	var rateLimiter *KikRateLimiter = nil
+	if !fromIsClient && antiSpam {
+		rateLimiter = CreateRateLimiter()
+	}
+
 	for {
-		_, stanza, err := inputStream.ReadNextStanza()
-		// node, stanza, err := inputStream.ReadNextStanza()
-		// Here you can log the stanza, change the contents, etc
-		// before forwarding it on to the recipient
+		node, stanza, err := inputStream.ReadNextStanza()
 
 		if err != nil {
+			if rateLimiter != nil {
+				rateLimiter.FlushMessages(from)
+			}
 			errMessage := err.Error()
 
 			if strings.HasPrefix(errMessage, "XML syntax error") {
@@ -332,6 +340,14 @@ func proxy(from net.Conn, to net.Conn) {
 			}
 			return
 		}
+
+		if rateLimiter != nil {
+			blocked := rateLimiter.ProcessMessage(from, *node)
+			if blocked {
+				continue
+			}
+		}
+
 		to.Write([]byte(*stanza))
 		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 	}

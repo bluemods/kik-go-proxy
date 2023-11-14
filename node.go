@@ -17,6 +17,61 @@ type Node struct {
 	Text       string
 }
 
+// Returns true if the Node contains the attribute key.
+func (n Node) HasAttribute(key string) bool {
+	_, found := n.Attributes[key]
+	return found
+}
+
+// Returns true if there is a child with the same name as the parameter.
+func (n Node) HasTag(name string) bool {
+	return n.Find(name) != nil
+}
+
+// Finds an attribute value by its name.
+// Returns an empty string if not found.
+func (n Node) Get(key string) string {
+	ret, found := n.Attributes[key]
+	if found {
+		return ret
+	} else {
+		return ""
+	}
+}
+
+// Finds the first matching child by its name.
+// Returns nil if not found.
+func (n Node) Find(name string) *Node {
+	for _, child := range n.Children {
+		if child.Name == name {
+			return &child
+		}
+	}
+	return nil
+}
+
+// Finds the last matching child by its name.
+// Returns nil if not found.
+func (n Node) FindLast(name string) *Node {
+	for i := len(n.Children) - 1; i >= 0; i-- {
+		child := n.Children[i]
+		if child.Name == name {
+			return &child
+		}
+	}
+	return nil
+}
+
+// Finds all matching children by name.
+func (n Node) FindAll(name string) (ret []Node) {
+	for _, child := range n.Children {
+		if child.Name == name {
+			ret = append(ret, child)
+		}
+	}
+	return ret
+}
+
 // Reads the next Node from the XMLPull Parser.
 // Parser must be positioned on a StartTag.
 func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
@@ -68,7 +123,7 @@ func ParseInitialK(parser *xpp.XMLPullParser) (*Node, error) {
 	for {
 		eventType, err := parser.Next()
 		if err != nil {
-			if first && err == io.EOF {
+			if first && strings.HasSuffix(err.Error(), "unexpected EOF") {
 				// Stream headers can be unclosed,
 				// this is normal. Return the node.
 				return ret, nil
@@ -93,7 +148,7 @@ func ParseInitialK(parser *xpp.XMLPullParser) (*Node, error) {
 // Parse a <k/> string.
 // They need special handling as they are not always closed.
 func ParseInitialKString(xmpp string) (*Node, error) {
-	reader := strings.NewReader(xmpp)
+	reader := strings.NewReader(strings.Trim(xmpp, " "))
 	crReader := func(charset string, input io.Reader) (io.Reader, error) {
 		return input, nil
 	}
@@ -105,7 +160,7 @@ func ParseInitialKString(xmpp string) (*Node, error) {
 // Parse an XMPP string
 // Note that this will return an error if all tags are not properly closed.
 func ParseXmppString(xmpp string) (*Node, error) {
-	reader := strings.NewReader(xmpp)
+	reader := strings.NewReader(strings.Trim(xmpp, " "))
 	crReader := func(charset string, input io.Reader) (io.Reader, error) {
 		return input, nil
 	}
