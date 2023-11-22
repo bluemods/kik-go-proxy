@@ -21,9 +21,7 @@ type SortingMode struct {
 	Offset int
 }
 
-/*
-Makes a 'k' tag, including correct spaces and order.
-*/
+//Makes a 'k' tag, including correct spaces and order.
 func MakeKTag(attrs map[string]string) string {
 	BaseOrdering := &SortingMode{Base: -310256979, Offset: 13}
 	ExtendedOrdering := &SortingMode{Base: -1964139357, Offset: 7}
@@ -40,17 +38,16 @@ func MakeKTag(attrs map[string]string) string {
 		hashCode += int32(29)
 	}
 
-	// fmt.Println(fmt.Sprintf("hashCode: %d", hashCode))
-
-	k := strings.Repeat(" ", int(hashCode))
-	k += "<k"
+	k := new(strings.Builder)
+	k.WriteString(strings.Repeat(" ", int(hashCode)))
+	k.WriteString("<k")
 
 	extended := sortKikMap(base, *ExtendedOrdering)
 	for pair := extended.Oldest(); pair != nil; pair = pair.Next() {
-		k += " " + pair.Key + "=\"" + pair.Value + "\""
+		k.WriteString(" " + pair.Key + "=\"" + pair.Value + "\"")
 	}
-	k += ">"
-	return k
+	k.WriteString(">")
+	return k.String()
 }
 
 func sortKikMap(om *orderedmap.OrderedMap[string, string], mode SortingMode) *orderedmap.OrderedMap[string, string] {
@@ -125,9 +122,6 @@ func hashStrongMap(mode SortingMode, om *orderedmap.OrderedMap[string, string]) 
 		bytesBackward += res
 	}
 
-	// fmt.Println("Forward:  " + bytesForward)
-	// fmt.Println("Backward: " + bytesBackward)
-
 	base := int32(mode.Base)
 	offset := int32(mode.Offset)
 
@@ -139,12 +133,6 @@ func hashStrongMap(mode SortingMode, om *orderedmap.OrderedMap[string, string]) 
 	hashes = append(hashes, 0) // Can be removed
 	hashes = append(hashes, hashString(MD5, bytesBackward))
 
-	/*for i, number := range hashes {
-		if i == 0 || i == 1 || i == 5 {
-			fmt.Println(fmt.Sprintf("Hash %d: %s", i, strconv.Itoa(int(number))))
-		}
-	}*/
-
 	return base ^ hashes[0]<<offset ^ hashes[5]<<(offset*2) ^ hashes[1]<<offset ^ hashes[0]
 }
 
@@ -153,9 +141,9 @@ func mangleBytes(bytes []byte) int32 {
 
 	for k := 0; k < len(bytes); k += 4 {
 		j ^= ((byteToSignedInt(int(bytes[k+3]))) << int32(24)) |
-			 (byteToSignedInt(int(bytes[k+2])) << int32(16))   |
-			 (byteToSignedInt(int(bytes[k+1])) << int32(8))    |
-			 (byteToSignedInt(int(bytes[k])))
+			(byteToSignedInt(int(bytes[k+2])) << int32(16)) |
+			(byteToSignedInt(int(bytes[k+1])) << int32(8)) |
+			(byteToSignedInt(int(bytes[k])))
 	}
 	return int32(j)
 }

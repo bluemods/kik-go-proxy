@@ -214,7 +214,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 
 		dev, ok := attributes["dev"]
 		if !ok {
-			return nil, true, errors.New("No dev attribute in anon stanza")
+			return nil, true, errors.New("no dev attribute in anon stanza")
 		}
 
 		deviceId, err := ParseDeviceId(dev)
@@ -234,7 +234,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 
 		from, ok := attributes["from"]
 		if !ok {
-			return nil, true, errors.New("No from attribute in auth stanza")
+			return nil, true, errors.New("no from attribute in auth stanza")
 		}
 		jid, err := ParseFullJid(from)
 		if err != nil {

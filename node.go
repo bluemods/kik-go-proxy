@@ -76,7 +76,7 @@ func (n Node) FindAll(name string) (ret []Node) {
 // Parser must be positioned on a StartTag.
 func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 	if parser.Event != xpp.StartTag {
-		return nil, errors.New("Expected start tag")
+		return nil, errors.New("expected start tag")
 	}
 	var ret = new(Node)
 	ret.Text = ""
@@ -106,10 +106,10 @@ func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 
 func ParseInitialK(parser *xpp.XMLPullParser) (*Node, error) {
 	if parser.Event != xpp.StartTag {
-		return nil, errors.New("Expected start tag")
+		return nil, errors.New("expected start tag")
 	}
 	if parser.Name != "k" {
-		return nil, errors.New("Expected k tag")
+		return nil, errors.New("expected k tag")
 	}
 	var ret = new(Node)
 	ret.Text = ""

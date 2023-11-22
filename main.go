@@ -127,8 +127,8 @@ func parseApiKeyFile(apiKeyFile string) error {
 	}
 	fileSize := stat.Size()
 	if fileSize > 1024 {
-		return errors.New(fmt.Sprintf(
-			"API key file %s is too large (%d > %d)", apiKeyFile, fileSize, 1024))
+		return fmt.Errorf(
+			"API key file %s is too large (%d > %d)", apiKeyFile, fileSize, 1024)
 	}
 
 	apiKeyBytes, err := os.ReadFile(apiKeyFile)
@@ -137,8 +137,8 @@ func parseApiKeyFile(apiKeyFile string) error {
 	}
 	apiKey := strings.Trim(string(apiKeyBytes), " \r\n")
 	if !API_KEY_REGEX.MatchString(apiKey) {
-		return errors.New(fmt.Sprintf(
-			"API key in %s doesn't match regex `%s`", apiKey, API_KEY_PATTERN))
+		return fmt.Errorf(
+			"API key in %s doesn't match regex `%s`", apiKey, API_KEY_PATTERN)
 	}
 	log.Printf("API key set (length=%d)\n", len(apiKey))
 	currentHashedApiKey = hashApiKey(apiKey)
