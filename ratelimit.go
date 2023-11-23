@@ -74,16 +74,11 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message Node) bool {
 	if !exists {
 		limiter = rate.NewLimiter(RATE_LIMIT, RATE_LIMIT_BURST)
 		i.ChatIds.Add(correspondent, limiter)
-		// Allow will return true on first invocation, exit early
-		limiter.Allow()
-		return false
 	}
 	blocked := !limiter.Allow()
 	if blocked {
-		// Rate limit hit, let's mitigate.
-		// Check for 'qos' flag in message...
-
-		// log.Println("Rejecting spam from " + correspondent + ", size: " + strconv.Itoa(len(i.BlockedMessages)))
+		// Rate limit hit.
+		// Check for 'qos' flag in message to determine if ack is needed
 
 		qos := false
 		for _, kik := range message.FindAll("kik") {
@@ -112,7 +107,7 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message Node) bool {
 
 			if len(i.BlockedMessages) >= MAX_QOS_BATCH_SIZE {
 				i.FlushMessages(kikConn)
-				i.BlockedMessages = i.BlockedMessages[:0] // clear
+				i.BlockedMessages = i.BlockedMessages[:0] // clears the array
 			}
 		}
 	}
