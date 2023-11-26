@@ -40,10 +40,10 @@ const (
 	// Abort if Kik takes longer than this to send back the initial response
 	KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
 
-	// TLSv1.3 is recommended.
-	// If you have clients that don't support 1.3,
-	// change to tls.VersionTLS12
-	SERVER_TLS_VERSION = tls.VersionTLS13
+	// TLSv1.2 is recommended for compatibility reasons.
+	// If you don't need to support 1.2 clients, change to `tls.VersionTLS13`
+	// DO NOT use lower than 1.2, as older protocols contain security flaws.
+	SERVER_TLS_VERSION = tls.VersionTLS12
 
 	DEFAULT_INTERFACE_NAME = "eth0"
 

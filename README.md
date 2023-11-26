@@ -28,7 +28,7 @@ go mod tidy && go build && ./kik-go-proxy
 ## Arguments
 Note: If you use both -cert and -key, the program will use them to open an encrypted (SSL) connection.
 <br>
-The socket currently only accepts clients that support TLSv1.3.
+By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 
 | Argument | Effect                                                          |
 |----------|-----------------------------------------------------------------|
