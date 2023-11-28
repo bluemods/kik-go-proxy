@@ -9,6 +9,7 @@ require (
 	github.com/shabbyrobe/xmlwriter v0.0.0-20230525083848-85336ec334fa
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	golang.org/x/time v0.4.0
+	golang.org/x/crypto v0.16.0
 )
 
 require (

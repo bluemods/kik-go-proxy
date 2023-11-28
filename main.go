@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/pkcs12"
 )
 
 const (
@@ -76,8 +78,10 @@ var (
 
 func main() {
 	port := flag.String("port", "", "Port to listen for incoming connections on")
-	certFile := flag.String("cert", "", "certificate PEM file")
-	keyFile := flag.String("key", "", "key PEM file")
+	certFile := flag.String("cert", "", "certificate PEM file, must be used with -key")
+	keyFile := flag.String("key", "", "key PEM file, must be used with -cert")
+	p12File := flag.String("p12", "", ".p12 certificate file, must be used with -p12-pass")
+	p12PasswordFile := flag.String("p12-pass", "", ".p12 certificate password, must be used with -p12")
 	ipFile := flag.String("i", "", "file containing list of interface IPs, one per line")
 	iname := flag.String("iname", "", "the interface name to use, only meaningful with -i. Defaults to eth0")
 	apiKeyFile := flag.String("a", "", "file containing the API key that all clients must authenticate with (using x-api-key attribute in <k header)")
@@ -101,11 +105,25 @@ func main() {
 		log.Fatal("Failed parsing interface file: ", err.Error())
 	}
 
-	if *certFile != "" && *keyFile != "" {
+	if *p12File != "" && *p12PasswordFile != "" {
+		cert, err := loadP12Cert(*p12File, *p12PasswordFile)
+		if err != nil {
+			log.Fatal("Error loading .p12 certificate:", err.Error())
+		}
 		if *port == "" {
-			openSSLServer(SSL_SERVER_PORT, *certFile, *keyFile)
+			openSSLServer(SSL_SERVER_PORT, *cert)
 		} else {
-			openSSLServer(*port, *certFile, *keyFile)
+			openSSLServer(*port, *cert)
+		}
+	} else if *certFile != "" && *keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(*certFile, *keyFile)
+		if err != nil {
+			log.Fatal("Error loading key pair: ", err.Error())
+		}
+		if *port == "" {
+			openSSLServer(SSL_SERVER_PORT, cert)
+		} else {
+			openSSLServer(*port, cert)
 		}
 	} else {
 		if *port == "" {
@@ -114,6 +132,28 @@ func main() {
 			openPlainServer(*port)
 		}
 	}
+}
+
+func loadP12Cert(p12File string, p12PasswordFile string) (*tls.Certificate, error) {
+	p12Bytes, err := os.ReadFile(p12File)
+	if err != nil {
+		return nil, err
+	}
+	p12Password, err := os.ReadFile(p12PasswordFile)
+	if err != nil {
+		return nil, err
+	}
+	_, certificate, err := pkcs12.Decode(p12Bytes, string(p12Password))
+	// Explicitly zero the password array
+	for i := range p12Password {
+		p12Password[i] = 0
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Certificate{
+		Certificate: [][]byte{certificate.Raw},
+	}, nil
 }
 
 func parseApiKeyFile(apiKeyFile string) error {
@@ -182,11 +222,7 @@ func parseInterfaceFile(ipFile string) error {
 	return nil
 }
 
-func openSSLServer(port string, certFile string, keyFile string) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		log.Fatal("Error loading key pair:", err.Error())
-	}
+func openSSLServer(port string, cert tls.Certificate) {
 	config := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: SERVER_TLS_VERSION}
 	server, err := tls.Listen(SERVER_TYPE, ":"+port, config)
 	if err != nil {

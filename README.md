@@ -26,7 +26,8 @@ go mod tidy && go build && ./kik-go-proxy
 ```
 
 ## Arguments
-Note: If you use both -cert and -key, the program will use them to open an encrypted (SSL) connection.
+Note: If you use `-cert -key` or `-p12 -p12-pass` flag pairs, the program will use them to open an encrypted (SSL) connection. 
+The `-cert -key` and `-p12 -p12-pass` flags are mutually exclusive, you should use one or the other depending on the encoding of your certificate.
 <br>
 By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 
@@ -35,6 +36,8 @@ By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 | -port    | Change the port that the server will listen for connections on. |
 | -cert    | The relative path to your X.509 certificate.                    |
 | -key     | The relative path to your certificate key.                      |
+| -p12     | The relative path to your .p12 certificate file.                |
+| -p12-pass| The relative path to the file containing the p12 cert password. |
 | -i       | The relative path to your interface IP list, one per line       |
 | -iface   | The interface name to use, default is 'eth0'                    |
 | -a       | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header. |
