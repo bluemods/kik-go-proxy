@@ -81,7 +81,7 @@ func main() {
 	certFile := flag.String("cert", "", "certificate PEM file, must be used with -key")
 	keyFile := flag.String("key", "", "key PEM file, must be used with -cert")
 	p12File := flag.String("p12", "", ".p12 certificate file, must be used with -p12-pass")
-	p12PasswordFile := flag.String("p12-pass", "", ".p12 certificate password, must be used with -p12")
+	p12PasswordFile := flag.String("p12-pass", "", "file containing the .p12 certificate password, must be used with -p12")
 	ipFile := flag.String("i", "", "file containing list of interface IPs, one per line")
 	iname := flag.String("iname", "", "the interface name to use, only meaningful with -i. Defaults to eth0")
 	apiKeyFile := flag.String("a", "", "file containing the API key that all clients must authenticate with (using x-api-key attribute in <k header)")
