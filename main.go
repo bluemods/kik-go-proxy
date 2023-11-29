@@ -73,6 +73,8 @@ var (
 	interfaceIps  []string = make([]string, 0)
 	interfaceName string   = DEFAULT_INTERFACE_NAME
 
+	whitelist []string = make([]string, 0)
+
 	autoBanHosts bool = false
 	antiSpam     bool = false
 )
@@ -86,6 +88,7 @@ func main() {
 	ipFile := flag.String("i", "", "file containing list of interface IPs, one per line")
 	iname := flag.String("iname", "", "the interface name to use, only meaningful with -i. Defaults to eth0")
 	apiKeyFile := flag.String("a", "", "file containing the API key that all clients must authenticate with (using x-api-key attribute in <k header)")
+	whitelistFile := flag.String("whitelist", "", "file containing JIDs / device IDs that do not require API key authentication, one per line")
 	banHosts := flag.Bool("ban", false, "if true, misbehaving clients are IP banned from the server using iptables")
 	antiSpamFlag := flag.Bool("spam", false, "if true, incoming spam will be intercepted and blocked")
 	flag.Parse()
@@ -101,9 +104,13 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed parsing API key file: ", err.Error())
 	}
-	err = parseInterfaceFile(*ipFile)
+	err = parseDelimitedFile(*ipFile, &interfaceIps)
 	if err != nil {
 		log.Fatal("Failed parsing interface file: ", err.Error())
+	}
+	err = parseDelimitedFile(*whitelistFile, &whitelist)
+	if err != nil {
+		log.Fatal("Failed parsing whitelist file: ", err.Error())
 	}
 
 	if *p12File != "" && *p12PasswordFile != "" {
@@ -202,11 +209,11 @@ func hashApiKey(key string) []byte {
 	return hash
 }
 
-func parseInterfaceFile(ipFile string) error {
-	if ipFile == "" {
+func parseDelimitedFile(filePath string, collector *[]string) error {
+	if filePath == "" {
 		return nil
 	}
-	file, err := os.Open(ipFile)
+	file, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
@@ -215,16 +222,16 @@ func parseInterfaceFile(ipFile string) error {
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		ip := strings.Trim(scanner.Text(), " ")
+		line := strings.Trim(scanner.Text(), " ")
 
 		// This allows us to include comments like
-		// 1.1.1.1 # comment here
-		i := strings.Index(ip, "#")
+		// your_value # comment here
+		i := strings.Index(line, "#")
 		if i != -1 {
-			ip = strings.Trim(ip[:i], " ")
+			line = line[:i]
 		}
-		interfaceIps = append(interfaceIps, ip)
-		log.Println("Adding interface IP " + ip)
+		line = strings.Trim(line, " ")
+		*collector = append(*collector, line)
 	}
 	if err := scanner.Err(); err != nil {
 		return err
@@ -350,7 +357,11 @@ func BanHost(ipAddress string) {
 }
 
 func isExempted(k *InitialStreamTag) bool {
-	// You can add exemptions to API key rule here
+	for _, item := range whitelist {
+		if item == k.GetUserId() {
+			return true
+		}
+	}
 	return false
 }
 

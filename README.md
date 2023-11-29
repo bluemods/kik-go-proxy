@@ -31,17 +31,18 @@ The `-cert -key` and `-p12 -p12-pass` flags are mutually exclusive, you should u
 <br>
 By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 
-| Argument | Effect                                                          |
-|----------|-----------------------------------------------------------------|
-| -port    | Change the port that the server will listen for connections on. |
-| -cert    | The relative path to your X.509 certificate.                    |
-| -key     | The relative path to your certificate key.                      |
-| -p12     | The relative path to your .p12 certificate file.                |
-| -p12-pass| The relative path to the file containing the p12 cert password. |
-| -i       | The relative path to your interface IP list, one per line       |
-| -iface   | The interface name to use, default is 'eth0'                    |
-| -a       | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header. |
-| -ban     | If specified, misbehaving clients will be IP banned from the server using iptables |
+| Argument   | Effect                                                          |
+|------------|-----------------------------------------------------------------|
+| -port      | Change the port that the server will listen for connections on. |
+| -cert      | The relative path to your X.509 certificate.                    |
+| -key       | The relative path to your certificate key.                      |
+| -p12       | The relative path to your .p12 certificate file.                |
+| -p12-pass  | The relative path to the file containing the p12 cert password. |
+| -i         | The relative path to your interface IP list, one per line       |
+| -iface     | The interface name to use, default is 'eth0'                    |
+| -a         | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header. |
+| -whitelist | file containing JIDs / device IDs that do not require API key authentication, one per line |
+| -ban       | If specified, misbehaving clients will be IP banned from the server using iptables         |
 
 ## Notices
 - On Unix systems, you might get errors like ```Error accepting:  accept tcp4 0.0.0.0:5222: accept4: too many open files```.<br> If you do, try [raising the ulimit.](https://stackoverflow.com/a/32325509)
