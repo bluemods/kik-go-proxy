@@ -143,7 +143,7 @@ func loadP12Cert(p12File string, p12PasswordFile string) (*tls.Certificate, erro
 	if err != nil {
 		return nil, err
 	}
-	_, certificate, err := pkcs12.Decode(p12Bytes, string(p12Password))
+	privateKey, certificate, err := pkcs12.Decode(p12Bytes, string(p12Password))
 	// Explicitly zero the password array
 	for i := range p12Password {
 		p12Password[i] = 0
@@ -153,6 +153,7 @@ func loadP12Cert(p12File string, p12PasswordFile string) (*tls.Certificate, erro
 	}
 	return &tls.Certificate{
 		Certificate: [][]byte{certificate.Raw},
+		PrivateKey:  privateKey,
 	}, nil
 }
 
