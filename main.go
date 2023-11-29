@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -143,7 +144,9 @@ func loadP12Cert(p12File string, p12PasswordFile string) (*tls.Certificate, erro
 	if err != nil {
 		return nil, err
 	}
-	privateKey, certificate, err := pkcs12.Decode(p12Bytes, string(p12Password))
+	// This way supports more p12 certs, as not all of them
+	// will have exactly two safe bags in the PFX PDU
+	blocks, err := pkcs12.ToPEM(p12Bytes, string(p12Password))
 	// Explicitly zero the password array
 	for i := range p12Password {
 		p12Password[i] = 0
@@ -151,10 +154,16 @@ func loadP12Cert(p12File string, p12PasswordFile string) (*tls.Certificate, erro
 	if err != nil {
 		return nil, err
 	}
-	return &tls.Certificate{
-		Certificate: [][]byte{certificate.Raw},
-		PrivateKey:  privateKey,
-	}, nil
+
+	var pemData []byte
+	for _, block := range blocks {
+		pemData = append(pemData, pem.EncodeToMemory(block)...)
+	}
+	cert, err := tls.X509KeyPair(pemData, pemData)
+	if err != nil {
+		return nil, err
+	}
+	return &cert, nil
 }
 
 func parseApiKeyFile(apiKeyFile string) error {
