@@ -286,7 +286,6 @@ func handleNewConnection(clientConn net.Conn) {
 
 	clientConn.SetReadDeadline(time.Now().Add(CLIENT_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 	k, shouldBan, err := ParseInitialStreamTag(clientConn)
-	clientConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 
 	if err != nil {
 		if shouldBan {
@@ -375,6 +374,7 @@ func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
 	}
 
 	for {
+		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 		node, stanza, err := inputStream.ReadNextStanza()
 
 		if err != nil {
@@ -406,7 +406,6 @@ func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
 		}
 
 		to.Write([]byte(*stanza))
-		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 	}
 }
 

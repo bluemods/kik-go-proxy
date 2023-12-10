@@ -98,10 +98,9 @@ func (k InitialStreamTag) GetUserId() string {
 	}
 }
 
-/*
-Verifies the integrity of the stanza.
-if error returned is not nil, verification failed.
-*/
+
+// Verifies the integrity of the stanza.
+// if error returned is not nil, verification failed.
 func (k InitialStreamTag) MakeOutgoingPayload() (*OutgoingKPayload, error) {
 	expected := crypto.MakeKTag(k.Attributes)
 	received := k.RawStanza

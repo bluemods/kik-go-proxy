@@ -3,13 +3,14 @@ package crypto
 import (
 	"encoding/binary"
 	"errors"
+
 	"github.com/google/uuid"
 )
 
 func GenerateUUID() string {
 	for {
 		id, _ := makeId(uuid.New())
-		if (id != nil) {
+		if id != nil {
 			return id.String()
 		}
 	}
@@ -18,7 +19,7 @@ func GenerateUUID() string {
 // Mostly converted from smali bytecode after
 // decompiling a known working implementation in Java
 //
-// returns the new ID if successful, 
+// returns the new ID if successful,
 // or an error if the ID is not compatible
 func makeId(id uuid.UUID) (*uuid.UUID, error) {
 	if id.Version() != 4 {
@@ -28,11 +29,8 @@ func makeId(id uuid.UUID) (*uuid.UUID, error) {
 	lsb := int64(binary.BigEndian.Uint64(bytes[8:]))
 	msb := int64(binary.BigEndian.Uint64(bytes[:8]))
 
-	// fmt.Printf("lsb: %d\n", lsb)
-	// fmt.Printf("msb: %d\n", msb)
-
 	var i int32 = int32((msb & -1152921504606846976) >> 62)
-	
+
 	if i < 0 {
 		// TODO: this is a workaround as ~50% of IDs generated aren't
 		// compatible. Find a better way then remove this.
@@ -42,9 +40,7 @@ func makeId(id uuid.UUID) (*uuid.UUID, error) {
 
 	arr := [][]int32{{3, 6}, {2, 5}, {7, 1}, {9, 5}}
 
-	// fmt.Println(i)
 	i = shift(msb, arr[i][1]) + 1 | shift(msb, arr[i][0])<<1
-	// fmt.Printf("i=%d, j=%d\n", i, j)
 
 	var i2 int32 = int32(0)
 	var i3 int32 = int32(1)

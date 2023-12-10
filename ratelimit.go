@@ -39,9 +39,18 @@ type KikRateLimiter struct {
 // Bare minimum struct for a Kik message.
 // Only contains the fields required for acking the stanza via QoS.
 type SimpleKikMessage struct {
+	// The ID of the message
 	Id            string
+
+	// The JID of the chat.
+	// If IsGroup == true, this is the group JID. 
+	// Otherwise it is the same value as the Correspondent.
 	Bin           string
+
+	// The JID of the sender (the user that generated the message)
 	Correspondent string
+
+	// True if this message originated from a Kik Group
 	IsGroup       bool
 }
 
@@ -89,6 +98,7 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message Node) bool {
 		}
 
 		if qos {
+			id := message.Get("id")
 			bin := correspondent
 			g := message.FindLast("g")
 			isGroup := false
@@ -98,7 +108,7 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message Node) bool {
 			}
 
 			message := SimpleKikMessage{
-				Id:            message.Get("id"),
+				Id:            id,
 				Bin:           bin,
 				Correspondent: correspondent,
 				IsGroup:       isGroup,

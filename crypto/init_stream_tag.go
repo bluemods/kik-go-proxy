@@ -141,9 +141,9 @@ func mangleBytes(bytes []byte) int32 {
 
 	for k := 0; k < len(bytes); k += 4 {
 		j ^= ((byteToSignedInt(int(bytes[k+3]))) << int32(24)) |
-			(byteToSignedInt(int(bytes[k+2])) << int32(16)) |
-			(byteToSignedInt(int(bytes[k+1])) << int32(8)) |
-			(byteToSignedInt(int(bytes[k])))
+			 (byteToSignedInt(int(bytes[k+2]))   << int32(16)) |
+			 (byteToSignedInt(int(bytes[k+1]))   << int32(8))  |
+			 (byteToSignedInt(int(bytes[k])))
 	}
 	return int32(j)
 }
