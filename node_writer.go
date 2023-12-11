@@ -12,6 +12,12 @@ type NodeWriter struct {
 	_w   *xmlwriter.Writer
 }
 
+func NewNodeWriter() NodeWriter {
+	buf := new(bytes.Buffer)
+	w := xmlwriter.Open(buf)
+	return NodeWriter{_buf: buf, _w: w}
+}
+
 func (w NodeWriter) StartTag(name string) NodeWriter {
 	w._w.StartElem(xmlwriter.Elem{Name: name})
 	return w
@@ -58,12 +64,4 @@ func (w NodeWriter) Text(text string) NodeWriter {
 func (w NodeWriter) String() string {
 	w._w.EndAllFlush()
 	return w._buf.String()
-}
-
-func NewNodeWriter() NodeWriter {
-	buf := new(bytes.Buffer)
-	w := xmlwriter.Open(buf)
-	// ec := &xmlwriter.ErrCollector{}
-	// defer ec.Panic()
-	return NodeWriter{_buf: buf, _w: w}
 }
