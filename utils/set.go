@@ -14,12 +14,12 @@ type ConcurrentSet[T comparable] struct {
 // Adds a key to the set.
 // Returns true if the key was added to the set,
 // Returns false if the key is already in the set.
-func (s *ConcurrentSet[T]) Add(value T) bool {
+func (s *ConcurrentSet[T]) Add(key T) bool {
 	s.Lock()
 	defer s.Unlock()
-	isPresent := s.Contains(value)
-	s._map[value] = struct{}{}
-	return isPresent
+	_, ok := s._map[key]
+	s._map[key] = struct{}{}
+	return ok
 }
 
 // Deletes a key from the set.
@@ -48,6 +48,8 @@ func (s *ConcurrentSet[T]) Clear() {
 
 // Returns the amount of items currently in the set.
 func (s *ConcurrentSet[T]) Size() int {
+	s.Lock()
+	defer s.Unlock()
 	return len(s._map)
 }
 
