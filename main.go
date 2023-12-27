@@ -386,7 +386,7 @@ func isExempted(k *node.InitialStreamTag) bool {
 }
 
 func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
-	inputStream := node.CreateNodeInputStream(from)
+	inputStream := node.NewNodeInputStream(from)
 	defer inputStream.Reader.ClearBuffer()
 
 	var rateLimiter *ratelimit.KikRateLimiter = nil

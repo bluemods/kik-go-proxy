@@ -13,9 +13,11 @@ import (
 type KikInitialStreamResponse struct {
 	// True if Kik returned success on bind
 	IsOk bool
+  
 	// The timestamp of the Kik server, used to sync the local time of our server and connecting clients.
 	// If the client is binding pre-auth (anon="1"), the timestamp will be 0 and should be ignored.
 	Timestamp int64
+  
 	// The raw stanza received from Kik.
 	RawStanza string
 }
