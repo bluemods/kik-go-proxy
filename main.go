@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bluemods/kik-go-proxy/node"
+	"github.com/bluemods/kik-go-proxy/ratelimit"
 	"github.com/bluemods/kik-go-proxy/utils"
 	"golang.org/x/crypto/pkcs12"
 )
@@ -79,8 +81,8 @@ var (
 
 	autoBanHosts bool = false
 	antiSpam     bool = false
-	
-	// Holds a set of IPs that are banned 
+
+	// Holds a set of IPs that are banned
 	// or in the process of being banned.
 	// Field is thread safe.
 	bannedIps = utils.NewConcurrentSet[uint32]()
@@ -292,7 +294,7 @@ func handleNewConnection(clientConn net.Conn) {
 	}
 
 	clientConn.SetReadDeadline(time.Now().Add(CLIENT_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
-	k, shouldBan, err := ParseInitialStreamTag(clientConn)
+	k, shouldBan, err := node.ParseInitialStreamTag(clientConn)
 
 	if err != nil {
 		if shouldBan {
@@ -301,24 +303,19 @@ func handleNewConnection(clientConn net.Conn) {
 		log.Println("Rejecting from " + ipAddress + ": " + err.Error())
 		return
 	}
-	payload, err := k.MakeOutgoingPayload()
-	if err != nil {
-		log.Println("Failed validation " + ipAddress + ": " + err.Error())
-		BanHost(clientConn)
-		return
-	}
 	if !isExempted(k) && len(currentHashedApiKey) > 0 {
-		if len(payload.ApiKey) == 0 {
+		apiKey := k.ApiKey
+		if apiKey == nil {
 			log.Println(ipAddress + ": API key missing when required")
 			BanHost(clientConn)
 			return
 		}
-		if len(payload.ApiKey) < API_KEY_MIN_LENGTH || len(payload.ApiKey) > API_KEY_MAX_LENGTH {
+		if len(*apiKey) < API_KEY_MIN_LENGTH || len(*apiKey) > API_KEY_MAX_LENGTH {
 			log.Println(ipAddress + ": Invalid API key length")
 			BanHost(clientConn)
 			return
 		}
-		userHashedApiKey := hashApiKey(payload.ApiKey)
+		userHashedApiKey := hashApiKey(*apiKey)
 
 		// Constant time compare defends against timing attacks.
 		// Hashes always are the same length so ConstantTimeEq is unnecessary
@@ -331,7 +328,7 @@ func handleNewConnection(clientConn net.Conn) {
 
 	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ipAddress)
 
-	kikConn, err := connectToKik(clientConn, payload)
+	kikConn, err := connectToKik(clientConn, k)
 	if err != nil {
 		log.Println("Failed to connect " + ipAddress + " to Kik: " + err.Error())
 		return
@@ -379,7 +376,7 @@ func IPv4toInt(ipv4 net.IP) (uint32, error) {
 	return binary.BigEndian.Uint32(ipv4Bytes), nil
 }
 
-func isExempted(k *InitialStreamTag) bool {
+func isExempted(k *node.InitialStreamTag) bool {
 	for _, item := range whitelist {
 		if item == k.GetUserId() {
 			return true
@@ -389,12 +386,12 @@ func isExempted(k *InitialStreamTag) bool {
 }
 
 func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
-	inputStream := CreateNodeInputStream(from)
+	inputStream := node.CreateNodeInputStream(from)
 	defer inputStream.Reader.ClearBuffer()
 
-	var rateLimiter *KikRateLimiter = nil
+	var rateLimiter *ratelimit.KikRateLimiter = nil
 	if !fromIsClient && antiSpam {
-		rateLimiter = CreateRateLimiter()
+		rateLimiter = ratelimit.CreateRateLimiter()
 	}
 
 	for {
@@ -433,14 +430,14 @@ func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
 	}
 }
 
-func connectToKik(clientConn net.Conn, payload *OutgoingKPayload) (*tls.Conn, error) {
+func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, error) {
 	config := tls.Config{ServerName: KIK_HOST}
 
 	var dialer net.Dialer
-	if payload.InterfaceIp != "" {
-		if !slices.Contains(interfaceIps, payload.InterfaceIp) {
+	if payload.InterfaceIp != nil {
+		if !slices.Contains(interfaceIps, *payload.InterfaceIp) {
 			err := errors.New("Client requested to use unknown interface " +
-				payload.InterfaceIp + ", aborting connection")
+				*payload.InterfaceIp + ", aborting connection")
 			return nil, err
 		}
 		netInterface, err := net.InterfaceByName(interfaceName)
@@ -465,13 +462,13 @@ func connectToKik(clientConn net.Conn, payload *OutgoingKPayload) (*tls.Conn, er
 
 		for i := 0; i < len(addrs); i++ {
 			ip := addrs[i].(*net.IPNet).IP
-			if ip.String() == payload.InterfaceIp {
+			if ip.String() == *payload.InterfaceIp {
 				selectedIP = ip
 				break
 			}
 		}
 		if selectedIP == nil {
-			return nil, errors.New("Failed connecting via custom interface; '" + payload.InterfaceIp + "' not found in " + interfaceName)
+			return nil, errors.New("Failed connecting via custom interface; '" + *payload.InterfaceIp + "' not found in " + interfaceName)
 		}
 
 		tcpAddr := &net.TCPAddr{
@@ -493,11 +490,11 @@ func connectToKik(clientConn net.Conn, payload *OutgoingKPayload) (*tls.Conn, er
 	}
 	kikConn.Write([]byte(payload.RawStanza))
 	kikConn.SetReadDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
-	kikResponse, err := ParseInitialStreamResponse(kikConn)
+	kikResponse, err := node.ParseInitialStreamResponse(kikConn)
 	if err != nil {
 		return nil, err
 	}
-	clientConn.Write([]byte(kikResponse.GenerateServerResponse()))
+	clientConn.Write([]byte(kikResponse.GenerateServerResponse(CUSTOM_BANNER)))
 	if !kikResponse.IsOk {
 		return nil, errors.New("Kik rejected bind: " + kikResponse.RawStanza)
 	}

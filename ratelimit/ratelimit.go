@@ -1,4 +1,4 @@
-package main
+package ratelimit
 
 import (
 	"net"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bluemods/kik-go-proxy/crypto"
+	"github.com/bluemods/kik-go-proxy/node"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"golang.org/x/time/rate"
 )
@@ -70,7 +71,7 @@ func (m *SimpleKikMessage) GetMapKey() string {
 	return m.Bin + m.Correspondent + strconv.FormatBool(m.IsGroup)
 }
 
-func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message Node) bool {
+func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message node.Node) bool {
 	if message.Name != "message" {
 		return false
 	}
@@ -150,7 +151,7 @@ func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
 	}
 
 	// Write the QoS ack stanza...
-	w := NewNodeWriter()
+	w := node.NewNodeWriter()
 	w.StartTag("iq")
 	w.Attribute("type", "set")
 	w.Attribute("id", crypto.GenerateUUID())
