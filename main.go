@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/pem"
 	"errors"
 	"flag"
@@ -19,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bluemods/kik-go-proxy/utils"
 	"golang.org/x/crypto/pkcs12"
 )
 
@@ -77,6 +79,11 @@ var (
 
 	autoBanHosts bool = false
 	antiSpam     bool = false
+	
+	// Holds a set of IPs that are banned 
+	// or in the process of being banned.
+	// Field is thread safe.
+	bannedIps = utils.NewConcurrentSet[uint32]()
 )
 
 func main() {
@@ -289,7 +296,7 @@ func handleNewConnection(clientConn net.Conn) {
 
 	if err != nil {
 		if shouldBan {
-			BanHost(ipAddress)
+			BanHost(clientConn)
 		}
 		log.Println("Rejecting from " + ipAddress + ": " + err.Error())
 		return
@@ -297,18 +304,18 @@ func handleNewConnection(clientConn net.Conn) {
 	payload, err := k.MakeOutgoingPayload()
 	if err != nil {
 		log.Println("Failed validation " + ipAddress + ": " + err.Error())
-		BanHost(ipAddress)
+		BanHost(clientConn)
 		return
 	}
 	if !isExempted(k) && len(currentHashedApiKey) > 0 {
 		if len(payload.ApiKey) == 0 {
 			log.Println(ipAddress + ": API key missing when required")
-			BanHost(ipAddress)
+			BanHost(clientConn)
 			return
 		}
 		if len(payload.ApiKey) < API_KEY_MIN_LENGTH || len(payload.ApiKey) > API_KEY_MAX_LENGTH {
 			log.Println(ipAddress + ": Invalid API key length")
-			BanHost(ipAddress)
+			BanHost(clientConn)
 			return
 		}
 		userHashedApiKey := hashApiKey(payload.ApiKey)
@@ -317,7 +324,7 @@ func handleNewConnection(clientConn net.Conn) {
 		// Hashes always are the same length so ConstantTimeEq is unnecessary
 		if subtle.ConstantTimeCompare(userHashedApiKey, currentHashedApiKey) != 1 {
 			log.Println(ipAddress + ": API key mismatch")
-			BanHost(ipAddress)
+			BanHost(clientConn)
 			return
 		}
 	}
@@ -336,23 +343,40 @@ func handleNewConnection(clientConn net.Conn) {
 	proxy(true, clientConn, kikConn)
 }
 
-func BanHost(ipAddress string) {
+// This is a no-op if the client has an IPV6 address.
+// Rewrite the method if the code is changed to support IPV6.
+func BanHost(clientConn net.Conn) {
 	if !autoBanHosts {
 		return
 	}
-	if !IPV4_REGEX.MatchString(ipAddress) {
+	ip, _, _ := net.SplitHostPort(clientConn.RemoteAddr().String())
+	if !IPV4_REGEX.MatchString(ip) {
 		// This is ultra defensive programming
 		// to make sure no bad values can be passed to the command
-		log.Printf("Can't ban IP %s; doesn't match IPV4 regex", ipAddress)
+		log.Printf("Can't ban IP %s; doesn't match IPV4 regex", ip)
 		return
 	}
-	command := exec.Command("iptables", "-A", "INPUT", "-s", ipAddress, "-j", "DROP")
+	ipInt, err := IPv4toInt(net.ParseIP(ip))
+	if err == nil && bannedIps.Add(ipInt) {
+		// IP is already banned or in the process of being banned, take no action
+		return
+	}
+
+	command := exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP")
 	stdout, err := command.Output()
 	if err != nil {
-		log.Println("Failed to ban " + ipAddress + ": " + err.Error())
+		log.Println("Failed to ban " + ip + ": " + err.Error())
 	} else {
-		log.Println("Banned " + ipAddress + ": " + string(stdout))
+		log.Println("Banned " + ip + ": " + string(stdout))
 	}
+}
+
+func IPv4toInt(ipv4 net.IP) (uint32, error) {
+	ipv4Bytes := ipv4.To4()
+	if ipv4Bytes == nil {
+		return 0, errors.New("not a valid IPv4 address")
+	}
+	return binary.BigEndian.Uint32(ipv4Bytes), nil
 }
 
 func isExempted(k *InitialStreamTag) bool {
