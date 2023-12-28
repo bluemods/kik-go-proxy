@@ -102,7 +102,13 @@ func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 	}
 }
 
-func ParseInitialK(parser *xpp.XMLPullParser) (*Node, error) {
+// Parse a <k/> string.
+// They need special handling as they are not always closed.
+func ParseStreamHeader(xmpp string) (*Node, error) {
+	parser, err := NewStringPullParser(xmpp)
+	if err != nil {
+		return nil, err
+	}
 	if parser.Event != xpp.StartTag {
 		return nil, errors.New("expected start tag")
 	}
@@ -116,55 +122,21 @@ func ParseInitialK(parser *xpp.XMLPullParser) (*Node, error) {
 	for _, attr := range parser.Attrs {
 		ret.Attributes[attr.Name.Local] = attr.Value
 	}
-	first := true
-
-	for {
-		eventType, err := parser.Next()
-		if err != nil {
-			if first && strings.HasSuffix(err.Error(), "unexpected EOF") {
-				// Stream headers can be unclosed,
-				// this is normal. Return the node.
-				return ret, nil
-			} else {
-				return nil, err
-			}
-		} else if eventType == xpp.StartTag {
-			child, err := ParseNextNode(parser)
-			if err != nil {
-				return nil, err
-			}
-			ret.Children = append(ret.Children, *child)
-		} else if eventType == xpp.Text {
-			ret.Text = parser.Text
-		} else if eventType == xpp.EndTag || eventType == xpp.EndDocument {
-			return ret, nil
-		}
-		first = false
-	}
-}
-
-// Parse a <k/> string.
-// They need special handling as they are not always closed.
-func ParseInitialKString(xmpp string) (*Node, error) {
-	parser, err := _newReader(xmpp)
-	if err != nil {
-		return nil, err
-	}
-	return ParseInitialK(parser)
+	return ret, nil
 }
 
 // Parse an XMPP string
 // Note that this will return an error if all tags are not properly closed.
 func ParseXmppString(xmpp string) (*Node, error) {
-	parser, err := _newReader(xmpp)
+	parser, err := NewStringPullParser(xmpp)
 	if err != nil {
 		return nil, err
 	}
 	return ParseNextNode(parser)
 }
 
-// Creates a new reader for a given string.
-func _newReader(xmpp string) (*xpp.XMLPullParser, error) {
+// Creates a new XMLPullParser for a given string.
+func NewStringPullParser(xmpp string) (*xpp.XMLPullParser, error) {
 	reader := strings.NewReader(strings.Trim(xmpp, " "))
 	crReader := func(charset string, input io.Reader) (io.Reader, error) {
 		return input, nil

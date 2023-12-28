@@ -41,13 +41,10 @@ func (k InitialStreamTag) GetUserId() string {
 	}
 }
 
-// Parses the initial stream tag from the client.
+// Parses and verifies the initial stream tag from the client.
 // If the error returned is nil, the parsing succeeded,
 // and the other return values must be ignored.
 // Returns: InitialStreamTag, shouldBanIp, error
-
-// Verifies the integrity of the stanza.
-// if error returned is not nil, verification failed.
 func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	var startTagSeen bool = false
 	var whitespaceCount int = 0
@@ -110,7 +107,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	if strings.HasSuffix(stanza.String(), "/>") {
 		return nil, true, errors.New("initial stream tag already closed\n" + stanza.String())
 	}
-	node, err := ParseInitialKString(stanza.String())
+	node, err := ParseStreamHeader(stanza.String())
 	if err != nil {
 		return nil, true, err
 	}

@@ -7,17 +7,18 @@ import (
 	"time"
 
 	"github.com/bluemods/kik-go-proxy/crypto"
+	xpp "github.com/mmcdole/goxpp"
 )
 
 // Describes a bind response from Kik
 type KikInitialStreamResponse struct {
 	// True if Kik returned success on bind
 	IsOk bool
-  
+
 	// The timestamp of the Kik server, used to sync the local time of our server and connecting clients.
 	// If the client is binding pre-auth (anon="1"), the timestamp will be 0 and should be ignored.
 	Timestamp int64
-  
+
 	// The raw stanza received from Kik.
 	RawStanza string
 }
@@ -37,51 +38,40 @@ func (response KikInitialStreamResponse) GenerateServerResponse(customBanner boo
 }
 
 func ParseInitialStreamResponse(kikConn net.Conn) (*KikInitialStreamResponse, error) {
-	var stanza strings.Builder
-	buf := make([]byte, 1)
-	isBindRejected := false
-
+	input := NewNodeInputStream(kikConn)
+	parser := input.Parser
 	for {
-		_, err := kikConn.Read(buf)
+		event, err := parser.Next()
 		if err != nil {
 			return nil, err
 		}
-		var c byte = buf[0]
-		stanza.WriteByte(c)
-		if c == '>' {
-			if !isBindRejected && strings.Contains(stanza.String(), " ok=\"1\"") {
-				// When ok="1" is sent, bind succeeded, and there are no child elements
-				// (we are at the end of the header)
-				break
-			}
-			isBindRejected = true
-			if strings.Contains(stanza.String(), "</k>") {
-				// Stream response is not ok, there will be child elements.
-				// Read until the k tag is closed
-				break
-			}
+		if event == xpp.StartTag && parser.Name == "k" {
+			break
 		}
 	}
-	k, err := ParseInitialKString(stanza.String())
-	if err != nil {
-		return nil, err
-	}
 
-	var isOk bool = k.Attributes["ok"] == "1"
+	var isOk bool = parser.Attribute("ok") == "1"
+	var timestamp int64 = 0
+	var stanza string
 
-	if v, ok := k.Attributes["ts"]; ok {
-		timestamp, _ := strconv.ParseInt(v, 10, 64)
+	if isOk {
+		// Ok response, stream header does not close until the stream ends
+		timestamp, _ := strconv.ParseInt(parser.Attribute("ts"), 10, 64)
 		if timestamp > 0 {
 			crypto.SetServerTimeOffset(timestamp - time.Now().UnixMilli())
 		}
-		return &KikInitialStreamResponse{
-			IsOk:      isOk,
-			Timestamp: timestamp,
-			RawStanza: stanza.String()}, nil
+		stanza = input.Reader.GetBuffer()
 	} else {
-		return &KikInitialStreamResponse{
-			IsOk:      isOk,
-			Timestamp: 0,
-			RawStanza: stanza.String()}, nil
+		// Not ok, the tag will be self closing
+		// TODO return specialized error codes
+		_, xml, err := input.ReadNextStanza()
+		if err != nil {
+			return nil, err
+		}
+		stanza = *xml
 	}
+	return &KikInitialStreamResponse{
+		IsOk:      isOk,
+		Timestamp: timestamp,
+		RawStanza: stanza}, nil
 }
