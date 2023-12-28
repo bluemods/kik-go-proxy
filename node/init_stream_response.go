@@ -3,7 +3,6 @@ package node
 import (
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bluemods/kik-go-proxy/crypto"
@@ -26,15 +25,15 @@ type KikInitialStreamResponse struct {
 func (response KikInitialStreamResponse) GenerateServerResponse(customBanner bool) string {
 	if !response.IsOk || !customBanner {
 		return response.RawStanza
-	} else {
-		var k strings.Builder
-		k.Write([]byte(`<k ok="1"`))
-		if response.Timestamp > 0 {
-			k.Write([]byte(` ts="` + strconv.FormatInt(response.Timestamp, 10) + `"`))
-		}
-		k.Write([]byte(` server="KikGoProxyServer">`))
-		return k.String()
 	}
+	k := NewNodeWriter()
+	k.StartTag("k")
+	k.Attribute("ok", "1")
+	if response.Timestamp > 0 {
+		k.Attribute("ts", strconv.FormatInt(response.Timestamp, 10))
+	}
+	k.Attribute("server", "KikGoProxyServer")
+	return k.String() + ">"
 }
 
 func ParseInitialStreamResponse(kikConn net.Conn) (*KikInitialStreamResponse, error) {
@@ -51,14 +50,15 @@ func ParseInitialStreamResponse(kikConn net.Conn) (*KikInitialStreamResponse, er
 	}
 
 	var isOk bool = parser.Attribute("ok") == "1"
-	var timestamp int64 = 0
+	var timestamp int64
 	var stanza string
 
 	if isOk {
 		// Ok response, stream header does not close until the stream ends
-		timestamp, _ := strconv.ParseInt(parser.Attribute("ts"), 10, 64)
-		if timestamp > 0 {
-			crypto.SetServerTimeOffset(timestamp - time.Now().UnixMilli())
+		ts, _ := strconv.ParseInt(parser.Attribute("ts"), 10, 64)
+		if ts > 0 {
+			timestamp = ts
+			crypto.SetServerTimeOffset(ts - time.Now().UnixMilli())
 		}
 		stanza = input.Reader.GetBuffer()
 	} else {

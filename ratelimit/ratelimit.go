@@ -181,6 +181,7 @@ func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
 	w.EndTag("history")
 	w.EndTag("query")
 	w.EndTag("iq")
+	w.EndAllFlush()
 
 	stanza := w.String()
 
