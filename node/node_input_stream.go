@@ -44,7 +44,7 @@ func (input NodeInputStream) ReadNextStanza() (*Node, *string, error) {
 // Create a XMLPullParser for a long-lived input stream.
 func NewNodeInputStream(connection net.Conn) NodeInputStream {
 	reader := LoggingBufferedReader{
-		r:      bufio.NewReaderSize(connection, 4096),
+		r:      bufio.NewReader(connection),
 		Buffer: new(strings.Builder),
 	}
 	cr := func(charset string, input io.Reader) (io.Reader, error) {
