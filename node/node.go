@@ -76,12 +76,12 @@ func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 	if parser.Event != xpp.StartTag {
 		return nil, errors.New("expected start tag")
 	}
-	var ret = new(Node)
-	ret.Text = ""
-	ret.Name = parser.Name
-	ret.Attributes = map[string]string{}
+	node := new(Node)
+	node.Text = ""
+	node.Name = parser.Name
+	node.Attributes = map[string]string{}
 	for _, attr := range parser.Attrs {
-		ret.Attributes[attr.Name.Local] = attr.Value
+		node.Attributes[attr.Name.Local] = attr.Value
 	}
 
 	for {
@@ -93,18 +93,18 @@ func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			ret.Children = append(ret.Children, *child)
+			node.Children = append(node.Children, *child)
 		} else if eventType == xpp.Text {
-			ret.Text = parser.Text
+			node.Text = parser.Text
 		} else if eventType == xpp.EndTag {
-			return ret, nil
+			return node, nil
 		} else if eventType == xpp.EndDocument {
 			return nil, errors.New("unexpected end of document before end of stanza")
 		}
 	}
 }
 
-// Parses an initial stream header.
+// Parses an initial stream header from a string.
 // Stream headers must not be self-closing.
 func ParseStreamHeader(xmpp string) (*Node, error) {
 	parser, err := NewStringPullParser(xmpp)
@@ -117,14 +117,14 @@ func ParseStreamHeader(xmpp string) (*Node, error) {
 	if parser.Name != "k" {
 		return nil, errors.New("expected k tag")
 	}
-	var ret = new(Node)
-	ret.Text = ""
-	ret.Name = parser.Name
-	ret.Attributes = map[string]string{}
+	node := new(Node)
+	node.Text = ""
+	node.Name = parser.Name
+	node.Attributes = map[string]string{}
 	for _, attr := range parser.Attrs {
-		ret.Attributes[attr.Name.Local] = attr.Value
+		node.Attributes[attr.Name.Local] = attr.Value
 	}
-	return ret, nil
+	return node, nil
 }
 
 // Parse an XMPP string
