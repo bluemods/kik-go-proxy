@@ -96,14 +96,16 @@ func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 			ret.Children = append(ret.Children, *child)
 		} else if eventType == xpp.Text {
 			ret.Text = parser.Text
-		} else if eventType == xpp.EndTag || eventType == xpp.EndDocument {
+		} else if eventType == xpp.EndTag {
 			return ret, nil
+		} else if eventType == xpp.EndDocument {
+			return nil, errors.New("unexpected end of document before end of stanza")
 		}
 	}
 }
 
-// Parse a <k/> string.
-// They need special handling as they are not always closed.
+// Parses an initial stream header.
+// Stream headers must not be self-closing.
 func ParseStreamHeader(xmpp string) (*Node, error) {
 	parser, err := NewStringPullParser(xmpp)
 	if err != nil {
