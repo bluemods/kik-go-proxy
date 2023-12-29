@@ -7,8 +7,8 @@ import (
 // Adapted from https://gist.github.com/bgadrian/cb8b9344d9c66571ef331a14eb7a2e80
 // Supports generics and concurrent access from multiple goroutines.
 type ConcurrentSet[T comparable] struct {
-	_map map[T]struct{} // empty structs occupy 0 memory
-	sync.Mutex          // Mutex that allows for safe concurrent access
+	_map       map[T]struct{} // empty structs occupy 0 memory
+	sync.Mutex                // Mutex that allows for safe concurrent access
 }
 
 // Adds a key to the set.
@@ -18,7 +18,10 @@ func (s *ConcurrentSet[T]) Add(key T) bool {
 	s.Lock()
 	defer s.Unlock()
 	_, ok := s._map[key]
-	s._map[key] = struct{}{}
+	if !ok {
+		// Add if not present
+		s._map[key] = struct{}{}
+	}
 	return ok
 }
 
