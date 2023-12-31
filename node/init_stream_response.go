@@ -50,7 +50,7 @@ func ParseInitialStreamResponse(kikConn net.Conn) (*KikInitialStreamResponse, er
 	}
 
 	var isOk bool = parser.Attribute("ok") == "1"
-	var timestamp int64
+	var timestamp int64 = 0
 	var stanza string
 
 	if isOk {
