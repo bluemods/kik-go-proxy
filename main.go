@@ -61,8 +61,7 @@ const (
 )
 
 var (
-	API_KEY_PATTERN string         = "^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$"
-	API_KEY_REGEX   *regexp.Regexp = regexp.MustCompile(API_KEY_PATTERN)
+	API_KEY_REGEX   *regexp.Regexp = regexp.MustCompile("^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$")
 	IPV4_REGEX      *regexp.Regexp = regexp.MustCompile(
 		`^((25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9])\.` +
 			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
@@ -204,7 +203,7 @@ func parseApiKeyFile(apiKeyFile string) error {
 	apiKey := strings.Trim(string(apiKeyBytes), " \r\n")
 	if !API_KEY_REGEX.MatchString(apiKey) {
 		return fmt.Errorf(
-			"API key in %s doesn't match regex `%s`", apiKey, API_KEY_PATTERN)
+			"API key at %s doesn't match regex `%s`", apiKeyFile, API_KEY_REGEX.String())
 	}
 	log.Printf("API key set (length=%d)\n", len(apiKey))
 	currentHashedApiKey = hashApiKey(apiKey)
@@ -377,8 +376,9 @@ func IPv4toInt(ipv4 net.IP) (uint32, error) {
 }
 
 func isExempted(k *node.InitialStreamTag) bool {
+	userId := k.GetUserId()
 	for _, item := range whitelist {
-		if item == k.GetUserId() {
+		if item == userId {
 			return true
 		}
 	}
