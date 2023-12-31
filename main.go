@@ -36,7 +36,7 @@ const (
 	// Client has this long to prove itself
 	CLIENT_INITIAL_READ_TIMEOUT_SECONDS = 2
 	// After initial read, abort if no data from client after this many seconds
-	CLIENT_READ_TIMEOUT_SECONDS = 180
+	CLIENT_READ_TIMEOUT_SECONDS = 60 * 10
 
 	// Host from 15.59.x on Android. All of them resolve to the same IPs, but we will use a newer version anyway
 	KIK_HOST = "talk15590an.kik.com"
