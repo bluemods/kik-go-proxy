@@ -61,8 +61,8 @@ const (
 )
 
 var (
-	API_KEY_REGEX   *regexp.Regexp = regexp.MustCompile("^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$")
-	IPV4_REGEX      *regexp.Regexp = regexp.MustCompile(
+	API_KEY_REGEX *regexp.Regexp = regexp.MustCompile("^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$")
+	IPV4_REGEX    *regexp.Regexp = regexp.MustCompile(
 		`^((25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9])\.` +
 			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
 			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
@@ -431,7 +431,14 @@ func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
 }
 
 func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, error) {
-	config := tls.Config{ServerName: KIK_HOST}
+	// Only support 1.2 for now.
+	// As of 1/5/24, Kik is abusing the protocol to DoS clients connecting through 1.3.
+	// Not sure if intentional, but this solves the problem.
+	config := tls.Config{
+		ServerName: KIK_HOST,
+		MinVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS12,
+	}
 
 	var dialer net.Dialer
 	if payload.InterfaceIp != nil {
