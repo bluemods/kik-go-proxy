@@ -248,7 +248,10 @@ func parseDelimitedFile(filePath string, collector *[]string) error {
 }
 
 func openSSLServer(port string, cert tls.Certificate) {
-	config := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: SERVER_TLS_VERSION}
+	config := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   SERVER_TLS_VERSION,
+	}
 	server, err := tls.Listen(SERVER_TYPE, ":"+port, config)
 	if err != nil {
 		log.Fatal("Error opening SSL socket:", err.Error())

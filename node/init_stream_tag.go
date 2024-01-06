@@ -9,12 +9,19 @@ import (
 	"github.com/bluemods/kik-go-proxy/datatypes"
 )
 
+var (
+	_bannableOffenses = []string{
+		"tls: client offered only unsupported versions:",
+		"tls: first record does not look like a TLS handshake",
+	}
+)
+
 // Describes a bind request from the client
 type InitialStreamTag struct {
 	// The attributes in the <k stanza
 	Attributes map[string]string
 
-	// The raw stanza provided from the client
+	// The raw stanza received from the client
 	RawStanza string
 
 	// True if the client is authenticating with Kik using credentials
@@ -29,7 +36,7 @@ type InitialStreamTag struct {
 	// Optional interface IP specified by the client
 	InterfaceIp *string
 
-	// Optional API key specified by the client.
+	// Optional API key specified by the client
 	ApiKey *string
 }
 
@@ -56,13 +63,8 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	for {
 		_, err := conn.Read(buf)
 		if err != nil {
-			bannableOffenses := [2]string{
-				"tls: client offered only unsupported versions:",
-				"tls: first record does not look like a TLS handshake",
-			}
-
 			errMessage := err.Error()
-			for _, offense := range bannableOffenses {
+			for _, offense := range _bannableOffenses {
 				if strings.Contains(errMessage, offense) {
 					return nil, true, err
 				}

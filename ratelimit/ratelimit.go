@@ -126,6 +126,10 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message node.Node) boo
 }
 
 func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
+	if len(i.BlockedMessages) == 0 {
+		return
+	}
+
 	temp := make(map[string]*QoSMessageSorter)
 
 	for _, message := range i.BlockedMessages {
@@ -144,10 +148,6 @@ func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
 			}
 			temp[mapKey] = sorter
 		}
-	}
-
-	if len(temp) == 0 {
-		return
 	}
 
 	// Write the QoS ack stanza...
