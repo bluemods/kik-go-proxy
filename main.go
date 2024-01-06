@@ -34,7 +34,7 @@ const (
 	// Listen on IPV4. Kik requires IPV4 so it should be no issue
 	SERVER_TYPE = "tcp4"
 	// Client has this long to prove itself
-	CLIENT_INITIAL_READ_TIMEOUT_SECONDS = 2
+	CLIENT_INITIAL_READ_TIMEOUT_SECONDS = 3
 	// After initial read, abort if no data from client after this many seconds
 	CLIENT_READ_TIMEOUT_SECONDS = 60 * 10
 
@@ -46,6 +46,8 @@ const (
 	KIK_SERVER_TYPE = "tcp"
 	// Abort if Kik takes longer than this to send back the initial response
 	KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
+	// Abort if a write call takes longer than this
+	WRITE_TIMEOUT_SECONDS = 15
 
 	// TLSv1.2 is recommended for compatibility reasons.
 	// If you don't need to support 1.2 clients, change to `tls.VersionTLS13`
@@ -252,7 +254,7 @@ func openSSLServer(port string, cert tls.Certificate) {
 	}
 	server, err := tls.Listen(SERVER_TYPE, ":"+port, config)
 	if err != nil {
-		log.Fatal("Error opening SSL socket:", err.Error())
+		log.Fatal("Error opening SSL socket: ", err.Error())
 	}
 	defer server.Close()
 	log.Println("Listening using SSL on :" + port)
@@ -427,7 +429,11 @@ func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
 			}
 		}
 
-		to.Write([]byte(*stanza))
+		to.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT_SECONDS * time.Second))
+		_, err = to.Write([]byte(*stanza))
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -496,8 +502,14 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 	if err != nil {
 		return nil, err
 	}
-	kikConn.Write([]byte(payload.RawStanza))
 	kikConn.SetReadDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+	kikConn.SetWriteDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+
+	_, err = kikConn.Write([]byte(payload.RawStanza))
+	if err != nil {
+		return nil, err
+	}
+
 	kikResponse, err := node.ParseInitialStreamResponse(kikConn)
 	if err != nil {
 		return nil, err
