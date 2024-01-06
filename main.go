@@ -352,7 +352,7 @@ func BanHost(clientConn net.Conn) {
 	if !IPV4_REGEX.MatchString(ip) {
 		// This is ultra defensive programming
 		// to make sure no bad values can be passed to the command
-		log.Printf("Can't ban IP %s; doesn't match IPV4 regex", ip)
+		log.Printf("Can't ban IP %s; doesn't match IPV4 regex\n", ip)
 		return
 	}
 	ipInt, err := IPv4toInt(net.ParseIP(ip))
@@ -432,6 +432,10 @@ func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
 		to.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT_SECONDS * time.Second))
 		_, err = to.Write([]byte(*stanza))
 		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				log.Printf("Write deadline exceeded. packetSize=%d, isClient=%t\n",
+					len(*stanza), fromIsClient)
+			}
 			return
 		}
 	}
@@ -502,8 +506,7 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 	if err != nil {
 		return nil, err
 	}
-	kikConn.SetReadDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
-	kikConn.SetWriteDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+	kikConn.SetDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 
 	_, err = kikConn.Write([]byte(payload.RawStanza))
 	if err != nil {
