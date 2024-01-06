@@ -211,10 +211,8 @@ func parseApiKeyFile(apiKeyFile string) error {
 }
 
 func hashApiKey(key string) []byte {
-	hasher := sha256.New()
-	hasher.Write([]byte(key))
-	hash := hasher.Sum(nil)
-	return hash
+	h := sha256.Sum256([]byte(key))
+	return h[:]
 }
 
 func parseDelimitedFile(filePath string, collector *[]string) error {

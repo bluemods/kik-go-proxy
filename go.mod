@@ -3,7 +3,7 @@ module github.com/bluemods/kik-go-proxy
 go 1.21
 
 require (
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.5.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mmcdole/goxpp v1.1.0
 	github.com/shabbyrobe/xmlwriter v0.0.0-20230525083848-85336ec334fa
