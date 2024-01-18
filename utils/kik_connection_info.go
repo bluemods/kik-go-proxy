@@ -103,9 +103,9 @@ func (c *KikConnectionInfo) MonitorServerHealth() {
 		var totalTicks float64 = float64(total1 - total0)
 		var cpuUsage float64 = 100 * (totalTicks - idleTicks) / totalTicks
 
-		log.Printf("CPU usage is %f%% [busy: %f, total: %f]\n", cpuUsage, totalTicks-idleTicks, totalTicks)
+		if cpuUsage >= 75 {
+			log.Printf("CPU usage is %f%% [busy: %f, total: %f]\n", cpuUsage, totalTicks-idleTicks, totalTicks)
 
-		if cpuUsage >= 80 {
 			// Rotate the IP address and port
 			addrs, err := dnsResolver.LookupHost(context.Background(), _DEFAULT_KIK_HOST)
 			if err != nil {
@@ -130,7 +130,7 @@ func (c *KikConnectionInfo) MonitorServerHealth() {
 				newHost = addrs[0]
 			} else {
 				for {
-					newHost := addrs[len(addrs)%getRandomByte()]
+					newHost := addrs[getRandomByte()%len(addrs)]
 					if newHost != c.Host {
 						break
 					}
