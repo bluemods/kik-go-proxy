@@ -38,10 +38,6 @@ const (
 	// After initial read, abort if no data from client after this many seconds
 	CLIENT_READ_TIMEOUT_SECONDS = 60 * 10
 
-	// Host from 15.59.x on Android. All of them resolve to the same IPs, but we will use a newer version anyway
-	KIK_HOST = "talk15590an.kik.com"
-	// You can use port 443 or 5223 here, they behave the same
-	KIK_PORT = "443"
 	// Kik uses TCP
 	KIK_SERVER_TYPE = "tcp"
 	// Abort if Kik takes longer than this to send back the initial response
@@ -86,7 +82,9 @@ var (
 	// Holds a set of IPs that are banned
 	// or in the process of being banned.
 	// Field is thread safe.
-	bannedIps = utils.NewConcurrentSet[uint32]()
+	bannedIps *utils.ConcurrentSet[uint32] = utils.NewConcurrentSet[uint32]()
+
+	ConnectionInfo *utils.KikConnectionInfo = utils.NewConnectionInfo()
 )
 
 func main() {
@@ -248,6 +246,7 @@ func parseDelimitedFile(filePath string, collector *[]string) error {
 }
 
 func openSSLServer(port string, cert tls.Certificate) {
+	go ConnectionInfo.MonitorServerHealth()
 	config := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   SERVER_TLS_VERSION,
@@ -269,6 +268,7 @@ func openSSLServer(port string, cert tls.Certificate) {
 }
 
 func openPlainServer(port string) {
+	go ConnectionInfo.MonitorServerHealth()
 	server, err := net.Listen(SERVER_TYPE, ":"+port)
 	if err != nil {
 		log.Fatal("Error opening unencrypted socket:" + err.Error())
@@ -286,9 +286,13 @@ func openPlainServer(port string) {
 }
 
 func handleNewConnection(clientConn net.Conn) {
-	defer clientConn.Close()
+	connId := ConnectionInfo.AddConnection(clientConn)
+	defer func() {
+		ConnectionInfo.RemoveConnection(connId)
+		clientConn.Close()
+	}()
 
-	ipAddress, _, err := net.SplitHostPort(clientConn.RemoteAddr().String())
+	ip, _, err := net.SplitHostPort(clientConn.RemoteAddr().String())
 	if err != nil {
 		// Shouldn't happen but being safe
 		log.Println("Rejecting connection, could not parse remote IP address")
@@ -302,18 +306,18 @@ func handleNewConnection(clientConn net.Conn) {
 		if shouldBan {
 			BanHost(clientConn)
 		}
-		log.Println("Rejecting from " + ipAddress + ": " + err.Error())
+		log.Println("Rejecting from " + ip + ": " + err.Error())
 		return
 	}
 	if !isExempted(k) && len(currentHashedApiKey) > 0 {
 		apiKey := k.ApiKey
 		if apiKey == nil {
-			log.Println(ipAddress + ": API key missing when required")
+			log.Println(ip + ": API key missing when required")
 			BanHost(clientConn)
 			return
 		}
 		if len(*apiKey) < API_KEY_MIN_LENGTH || len(*apiKey) > API_KEY_MAX_LENGTH {
-			log.Println(ipAddress + ": Invalid API key length")
+			log.Println(ip + ": Invalid API key length")
 			BanHost(clientConn)
 			return
 		}
@@ -322,17 +326,17 @@ func handleNewConnection(clientConn net.Conn) {
 		// Constant time compare defends against timing attacks.
 		// Hashes always are the same length so ConstantTimeEq is unnecessary
 		if subtle.ConstantTimeCompare(userHashedApiKey, currentHashedApiKey) != 1 {
-			log.Println(ipAddress + ": API key mismatch")
+			log.Println(ip + ": API key mismatch")
 			BanHost(clientConn)
 			return
 		}
 	}
 
-	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ipAddress)
+	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ip)
 
 	kikConn, err := connectToKik(clientConn, k)
 	if err != nil {
-		log.Println("Failed to connect " + ipAddress + " to Kik: " + err.Error())
+		log.Println("Failed to connect " + ip + " to Kik: " + err.Error())
 		return
 	}
 
@@ -446,9 +450,9 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 	// As of 1/5/24, Kik is abusing the protocol to DoS clients connecting through 1.3.
 	// Not sure if intentional, but this solves the problem.
 	config := tls.Config{
-		ServerName: KIK_HOST,
-		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS12,
+		ServerName: ConnectionInfo.CerificateHost,
+		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
 	}
 
 	var dialer net.Dialer
@@ -502,7 +506,7 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 		}
 	}
 
-	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, KIK_HOST+":"+KIK_PORT, &config)
+	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, ConnectionInfo.Host+":"+ConnectionInfo.Port, &config)
 	if err != nil {
 		return nil, err
 	}
