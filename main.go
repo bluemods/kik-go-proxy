@@ -506,7 +506,7 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 		}
 	}
 
-	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, ConnectionInfo.Host+":"+ConnectionInfo.Port, &config)
+	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
 	if err != nil {
 		return nil, err
 	}

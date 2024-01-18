@@ -20,8 +20,8 @@ import (
 type KikConnectionInfo struct {
 	CerificateHost string
 
-	Host string
-	Port string
+	Host *string
+	Port *string
 
 	Connections     map[string]net.Conn
 	ConnectionMutex *sync.Mutex
@@ -40,9 +40,9 @@ func NewConnectionInfo() *KikConnectionInfo {
 		CerificateHost: _DEFAULT_KIK_HOST,
 
 		// Host from 15.59.x on Android. All of them resolve to the same IPs, but we will use a newer version anyway
-		Host: _DEFAULT_KIK_HOST,
+		Host: strPointer(_DEFAULT_KIK_HOST),
 		// You can use port 443 or 5223 here, they behave the same
-		Port: "5223",
+		Port: strPointer("5223"),
 
 		// Holds the list of active connections.
 		Connections:     make(map[string]net.Conn),
@@ -116,22 +116,23 @@ func (c *KikConnectionInfo) MonitorServerHealth() {
 				log.Println("No A records returned for host " + _DEFAULT_KIK_HOST)
 				continue
 			}
+			fmt.Printf("IPs: %s\n", addrs)
 
-			var newHost string
-			var newPort string
+			var newHost *string
+			var newPort *string
 
 			if getRandomBool() {
-				newPort = "5223"
+				newPort = strPointer("5223")
 			} else {
-				newPort = "443"
+				newPort = strPointer("443")
 			}
 
 			if len(addrs) == 1 {
-				newHost = addrs[0]
+				newHost = &addrs[0]
 			} else {
 				for {
 					newHost := addrs[getRandomByte()%len(addrs)]
-					if newHost != c.Host {
+					if newHost != *c.Host {
 						break
 					}
 				}
@@ -140,7 +141,7 @@ func (c *KikConnectionInfo) MonitorServerHealth() {
 			c.Host = newHost
 			c.Port = newPort
 
-			log.Printf("Selected new host: %s:%s\n", newHost, newPort)
+			log.Printf("Selected new host: %s:%s\n", *newHost, *newPort)
 			c.RemoveAllConnections()
 		}
 	}
@@ -193,4 +194,8 @@ func getRandomByte() int {
 		panic(err)
 	}
 	return int(b[0])
+}
+
+func strPointer(s string) *string {
+	return &s
 }
