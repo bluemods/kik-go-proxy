@@ -131,8 +131,9 @@ func (c *KikConnectionInfo) MonitorServerHealth() {
 				newHost = &addrs[0]
 			} else {
 				for {
-					newHost := addrs[getRandomByte()%len(addrs)]
-					if newHost != *c.Host {
+					host := addrs[getRandomByte()%len(addrs)]
+					if host != *c.Host {
+						newHost = &host
 						break
 					}
 				}
