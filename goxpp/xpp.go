@@ -1,3 +1,6 @@
+// This is a heavily modified version of goxpp, taken from here:
+// github.com/mmcdole/goxpp
+// See the LICENSE file in the current directory for copyright information.
 package xpp
 
 import (
@@ -62,7 +65,8 @@ func (p *XMLPullParser) NextTag() (event XMLEventType, err error) {
 	}
 
 	if t != StartTag && t != EndTag {
-		return event, fmt.Errorf("expected StartTag or EndTag but got %s at offset: %d", p.EventName(t), p.decoder.InputOffset())
+		return event, fmt.Errorf("expected StartTag or EndTag but got %s at offset: %d",
+			p.EventName(t), p.decoder.InputOffset())
 	}
 
 	return t, nil
