@@ -1,12 +1,11 @@
 package node
 
 import (
-	"net"
 	"strconv"
 	"time"
 
 	"github.com/bluemods/kik-go-proxy/crypto"
-	xpp "github.com/mmcdole/goxpp"
+	xpp "github.com/bluemods/kik-go-proxy/goxpp"
 )
 
 // Describes a bind response from Kik
@@ -36,8 +35,7 @@ func (response KikInitialStreamResponse) GenerateServerResponse(customBanner boo
 	return k.String() + ">"
 }
 
-func ParseInitialStreamResponse(kikConn net.Conn) (*KikInitialStreamResponse, error) {
-	input := NewNodeInputStream(kikConn)
+func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamResponse, error) {
 	parser := input.Parser
 	for {
 		event, err := parser.Next()

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"crypto/rand"
+	"crypto/tls"
 
 	"github.com/google/uuid"
 )
@@ -22,6 +23,9 @@ type KikConnectionInfo struct {
 
 	Host *string
 	Port *string
+
+	MinTlsVersion *uint16
+	MaxTlsVersion *uint16
 
 	Connections     map[string]net.Conn
 	ConnectionMutex *sync.Mutex
@@ -43,6 +47,9 @@ func NewConnectionInfo() *KikConnectionInfo {
 		Host: strPointer(_DEFAULT_KIK_HOST),
 		// You can use port 443 or 5223 here, they behave the same
 		Port: strPointer("5223"),
+
+		MinTlsVersion: intPointer(tls.VersionTLS12),
+		MaxTlsVersion: intPointer(tls.VersionTLS13),
 
 		// Holds the list of active connections.
 		Connections:     make(map[string]net.Conn),
@@ -116,15 +123,24 @@ func (c *KikConnectionInfo) MonitorServerHealth() {
 				log.Println("No A records returned for host " + _DEFAULT_KIK_HOST)
 				continue
 			}
-			fmt.Printf("IPs: %s\n", addrs)
 
 			var newHost *string
 			var newPort *string
+			var newMinTlsVersion *uint16
+			var newMaxTlsVersion *uint16
 
 			if getRandomBool() {
 				newPort = strPointer("5223")
 			} else {
 				newPort = strPointer("443")
+			}
+
+			if getRandomBool() {
+				newMinTlsVersion = intPointer(tls.VersionTLS12)
+				newMaxTlsVersion = intPointer(tls.VersionTLS12)
+			} else {
+				newMinTlsVersion = intPointer(tls.VersionTLS13)
+				newMaxTlsVersion = intPointer(tls.VersionTLS13)
 			}
 
 			if len(addrs) == 1 {
@@ -141,8 +157,10 @@ func (c *KikConnectionInfo) MonitorServerHealth() {
 
 			c.Host = newHost
 			c.Port = newPort
+			c.MinTlsVersion = newMinTlsVersion
+			c.MaxTlsVersion = newMaxTlsVersion
 
-			log.Printf("Selected new host: %s:%s\n", *newHost, *newPort)
+			log.Printf("Selected new host: %s:%s (TLSv1.%d)\n", *newHost, *newPort, 774-*newMaxTlsVersion)
 			c.RemoveAllConnections()
 		}
 	}
@@ -199,4 +217,8 @@ func getRandomByte() int {
 
 func strPointer(s string) *string {
 	return &s
+}
+
+func intPointer(i uint16) *uint16 {
+	return &i
 }

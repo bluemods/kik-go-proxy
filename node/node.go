@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	xpp "github.com/mmcdole/goxpp"
+	xpp "github.com/bluemods/kik-go-proxy/goxpp"
 )
 
 type Node struct {

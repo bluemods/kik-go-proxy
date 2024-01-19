@@ -5,7 +5,6 @@ go 1.21
 require (
 	github.com/google/uuid v1.5.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/mmcdole/goxpp v1.1.0
 	github.com/shabbyrobe/xmlwriter v0.0.0-20230525083848-85336ec334fa
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	golang.org/x/crypto v0.17.0

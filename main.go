@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -334,16 +335,167 @@ func handleNewConnection(clientConn net.Conn) {
 
 	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ip)
 
-	kikConn, err := connectToKik(clientConn, k)
+	kikConn, kikInput, err := connectToKik(clientConn, k)
 	if err != nil {
 		log.Println("Failed to connect " + ip + " to Kik: " + err.Error())
 		return
 	}
-
 	defer kikConn.Close()
 
-	go proxy(false, kikConn, clientConn)
-	proxy(true, clientConn, kikConn)
+	clientInput := node.NewNodeInputStream(clientConn)
+
+	go proxy(false, k.GetUserId(), kikConn, *kikInput, clientConn)
+	proxy(true, k.GetUserId(), clientConn, clientInput, kikConn)
+}
+
+func proxy(fromIsClient bool, userId string, from net.Conn, fromInput node.NodeInputStream, to net.Conn) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("proxy loop panicked (fromIsClient=%t, userId=%s, buffer=%s)\n%s\n",
+				fromIsClient, userId, fromInput.Reader.GetBuffer(), r)
+			debug.PrintStack()
+			from.Close()
+			to.Close()
+		} else {
+			fromInput.Reader.ClearBuffer()
+		}
+	}()
+
+	var rateLimiter *ratelimit.KikRateLimiter = nil
+	if !fromIsClient && antiSpam {
+		rateLimiter = ratelimit.CreateRateLimiter()
+	}
+
+	for {
+		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
+		node, stanza, err := fromInput.ReadNextStanza()
+
+		if err != nil {
+			if rateLimiter != nil {
+				rateLimiter.FlushMessages(from)
+			}
+			errMessage := err.Error()
+
+			if strings.HasPrefix(errMessage, "XML syntax error") {
+				if strings.HasSuffix(errMessage, "unexpected end element </k>") {
+					// XML parser currently treats it like an error.
+					// Send it manually to properly close connection
+					to.Write([]byte("</k>"))
+				} else {
+					// Log unexpected XML parsing errors
+					log.Println(
+						"Unexpected XML parsing error:\n" +
+							err.Error() + "\nStanza:\n" + fromInput.Reader.GetBuffer())
+				}
+			}
+			return
+		}
+
+		if rateLimiter != nil {
+			blocked := rateLimiter.ProcessMessage(from, *node)
+			if blocked {
+				continue
+			}
+		}
+
+		to.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT_SECONDS * time.Second))
+		_, err = to.Write([]byte(*stanza))
+		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				log.Printf("Write deadline exceeded. packetSize=%d, isClient=%t\n",
+					len(*stanza), fromIsClient)
+			}
+			return
+		}
+	}
+}
+
+func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, *node.NodeInputStream, error) {
+	// Only support 1.2 for now.
+	// As of 1/5/24, Kik is abusing the protocol to DoS clients connecting through 1.3.
+	// Not sure if intentional, but this solves the problem.
+
+	minVer := ConnectionInfo.MinTlsVersion
+	maxVer := ConnectionInfo.MaxTlsVersion
+
+	config := tls.Config{
+		ServerName: ConnectionInfo.CerificateHost,
+		MinVersion: *minVer,
+		MaxVersion: *maxVer,
+	}
+
+	var dialer net.Dialer
+	if payload.InterfaceIp != nil {
+		if !slices.Contains(interfaceIps, *payload.InterfaceIp) {
+			err := errors.New("Client requested to use unknown interface " +
+				*payload.InterfaceIp + ", aborting connection")
+			return nil, nil, err
+		}
+		netInterface, err := net.InterfaceByName(interfaceName)
+		if err != nil {
+			ifaces, netErr := net.Interfaces()
+			if netErr != nil {
+				return nil, nil, netErr
+			} else {
+				msg := "Missing interface, we can select from: "
+				for _, s := range ifaces {
+					msg += s.Name + ","
+				}
+				return nil, nil, errors.New(msg + " | " + err.Error())
+			}
+		}
+		addrs, err := netInterface.Addrs()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		var selectedIP net.IP
+
+		for i := 0; i < len(addrs); i++ {
+			ip := addrs[i].(*net.IPNet).IP
+			if ip.String() == *payload.InterfaceIp {
+				selectedIP = ip
+				break
+			}
+		}
+		if selectedIP == nil {
+			return nil, nil, errors.New("Failed connecting via custom interface; '" + *payload.InterfaceIp + "' not found in " + interfaceName)
+		}
+
+		tcpAddr := &net.TCPAddr{
+			IP: selectedIP,
+		}
+		dialer = net.Dialer{
+			LocalAddr: tcpAddr,
+			Timeout:   KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
+		}
+	} else {
+		dialer = net.Dialer{
+			Timeout: KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
+		}
+	}
+
+	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
+	if err != nil {
+		return nil, nil, err
+	}
+	kikConn.SetDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+
+	_, err = kikConn.Write([]byte(payload.RawStanza))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	kikInput := node.NewNodeInputStream(kikConn)
+	kikResponse, err := node.ParseInitialStreamResponse(kikInput)
+	if err != nil {
+		return nil, nil, err
+	}
+	clientConn.Write([]byte(kikResponse.GenerateServerResponse(CUSTOM_BANNER)))
+	if !kikResponse.IsOk {
+		return nil, nil, errors.New("Kik rejected bind: " + kikResponse.RawStanza)
+	}
+	return kikConn, &kikInput, nil
 }
 
 // This is a no-op if the client has an IPV6 address.
@@ -390,140 +542,4 @@ func isExempted(k *node.InitialStreamTag) bool {
 		}
 	}
 	return false
-}
-
-func proxy(fromIsClient bool, from net.Conn, to net.Conn) {
-	inputStream := node.NewNodeInputStream(from)
-	defer inputStream.Reader.ClearBuffer()
-
-	var rateLimiter *ratelimit.KikRateLimiter = nil
-	if !fromIsClient && antiSpam {
-		rateLimiter = ratelimit.CreateRateLimiter()
-	}
-
-	for {
-		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
-		node, stanza, err := inputStream.ReadNextStanza()
-
-		if err != nil {
-			if rateLimiter != nil {
-				rateLimiter.FlushMessages(from)
-			}
-			errMessage := err.Error()
-
-			if strings.HasPrefix(errMessage, "XML syntax error") {
-				if strings.HasSuffix(errMessage, "unexpected end element </k>") {
-					// XML parser currently treats it like an error.
-					// Send it manually to properly close connection
-					to.Write([]byte("</k>"))
-				} else {
-					// Log unexpected XML parsing errors
-					log.Println(
-						"Unexpected XML parsing error:\n" +
-							err.Error() + "\nStanza:\n" + inputStream.Reader.GetBuffer())
-				}
-			}
-			return
-		}
-
-		if rateLimiter != nil {
-			blocked := rateLimiter.ProcessMessage(from, *node)
-			if blocked {
-				continue
-			}
-		}
-
-		to.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT_SECONDS * time.Second))
-		_, err = to.Write([]byte(*stanza))
-		if err != nil {
-			if errors.Is(err, os.ErrDeadlineExceeded) {
-				log.Printf("Write deadline exceeded. packetSize=%d, isClient=%t\n",
-					len(*stanza), fromIsClient)
-			}
-			return
-		}
-	}
-}
-
-func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, error) {
-	// Only support 1.2 for now.
-	// As of 1/5/24, Kik is abusing the protocol to DoS clients connecting through 1.3.
-	// Not sure if intentional, but this solves the problem.
-	config := tls.Config{
-		ServerName: ConnectionInfo.CerificateHost,
-		MinVersion: tls.VersionTLS13,
-		MaxVersion: tls.VersionTLS13,
-	}
-
-	var dialer net.Dialer
-	if payload.InterfaceIp != nil {
-		if !slices.Contains(interfaceIps, *payload.InterfaceIp) {
-			err := errors.New("Client requested to use unknown interface " +
-				*payload.InterfaceIp + ", aborting connection")
-			return nil, err
-		}
-		netInterface, err := net.InterfaceByName(interfaceName)
-		if err != nil {
-			ifaces, netErr := net.Interfaces()
-			if netErr != nil {
-				return nil, netErr
-			} else {
-				msg := "Missing interface, we can select from: "
-				for _, s := range ifaces {
-					msg += s.Name + ","
-				}
-				return nil, errors.New(msg + " | " + err.Error())
-			}
-		}
-		addrs, err := netInterface.Addrs()
-		if err != nil {
-			return nil, err
-		}
-
-		var selectedIP net.IP
-
-		for i := 0; i < len(addrs); i++ {
-			ip := addrs[i].(*net.IPNet).IP
-			if ip.String() == *payload.InterfaceIp {
-				selectedIP = ip
-				break
-			}
-		}
-		if selectedIP == nil {
-			return nil, errors.New("Failed connecting via custom interface; '" + *payload.InterfaceIp + "' not found in " + interfaceName)
-		}
-
-		tcpAddr := &net.TCPAddr{
-			IP: selectedIP,
-		}
-		dialer = net.Dialer{
-			LocalAddr: tcpAddr,
-			Timeout:   KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
-		}
-	} else {
-		dialer = net.Dialer{
-			Timeout: KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
-		}
-	}
-
-	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
-	if err != nil {
-		return nil, err
-	}
-	kikConn.SetDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
-
-	_, err = kikConn.Write([]byte(payload.RawStanza))
-	if err != nil {
-		return nil, err
-	}
-
-	kikResponse, err := node.ParseInitialStreamResponse(kikConn)
-	if err != nil {
-		return nil, err
-	}
-	clientConn.Write([]byte(kikResponse.GenerateServerResponse(CUSTOM_BANNER)))
-	if !kikResponse.IsOk {
-		return nil, errors.New("Kik rejected bind: " + kikResponse.RawStanza)
-	}
-	return kikConn, nil
 }
