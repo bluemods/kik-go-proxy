@@ -7,6 +7,7 @@ import (
 
 	"github.com/bluemods/kik-go-proxy/crypto"
 	"github.com/bluemods/kik-go-proxy/datatypes"
+	"github.com/bluemods/kik-go-proxy/utils"
 )
 
 var (
@@ -53,6 +54,8 @@ func (k InitialStreamTag) GetUserId() string {
 // and the other return values must be ignored.
 // Returns: InitialStreamTag, shouldBanIp, error
 func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
+	defer utils.TimeMethod("ParseInitialStreamTag")()
+
 	var startTagSeen bool = false
 	var whitespaceCount int = 0
 	var characterCount int = 0

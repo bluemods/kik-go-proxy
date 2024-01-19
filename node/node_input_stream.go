@@ -35,6 +35,8 @@ func (input NodeInputStream) ReadNextStanza() (*Node, *string, error) {
 			}
 			buffer := input.Reader.GetBuffer()
 			return node, &buffer, nil
+		} else if event == xpp.EndTag && (parser.Name == "k" || parser.Name == "stream:stream") {
+			return nil, nil, errors.New("end of stream reached: " + parser.Name)
 		} else if event == xpp.EndDocument {
 			return nil, nil, errors.New("end of stream reached")
 		}

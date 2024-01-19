@@ -6,6 +6,7 @@ import (
 
 	"github.com/bluemods/kik-go-proxy/crypto"
 	xpp "github.com/bluemods/kik-go-proxy/goxpp"
+	"github.com/bluemods/kik-go-proxy/utils"
 )
 
 // Describes a bind response from Kik
@@ -36,6 +37,8 @@ func (response KikInitialStreamResponse) GenerateServerResponse(customBanner boo
 }
 
 func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamResponse, error) {
+	defer utils.TimeMethod("ParseInitialStreamResponse")()
+
 	parser := input.Parser
 	for {
 		event, err := parser.Next()

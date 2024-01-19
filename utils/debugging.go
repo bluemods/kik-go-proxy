@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	_debug = true
+	_debug = false
 )
 
 func TimeMethod(name string) func() {

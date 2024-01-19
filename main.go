@@ -335,16 +335,36 @@ func handleNewConnection(clientConn net.Conn) {
 
 	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ip)
 
-	kikConn, kikInput, err := connectToKik(clientConn, k)
+	kikConn, err := DialKik(clientConn, k)
 	if err != nil {
-		log.Println("Failed to connect " + ip + " to Kik: " + err.Error())
+		log.Println("Failed to dial " + ip + " to Kik: " + err.Error())
 		return
 	}
 	defer kikConn.Close()
 
+	kikConn.SetDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+
+	_, err = kikConn.Write([]byte(k.RawStanza))
+	if err != nil {
+		log.Println("Failed to write bind stanza: " + err.Error())
+		return
+	}
+
+	kikInput := node.NewNodeInputStream(kikConn)
+	kikResponse, err := node.ParseInitialStreamResponse(kikInput)
+	if err != nil {
+		log.Println("Failed to parse bind response: " + err.Error())
+		return
+	}
+	clientConn.Write([]byte(kikResponse.GenerateServerResponse(CUSTOM_BANNER)))
+	if !kikResponse.IsOk {
+		log.Println("Kik rejected bind: " + kikResponse.RawStanza)
+		return
+	}
+
 	clientInput := node.NewNodeInputStream(clientConn)
 
-	go proxy(false, k.GetUserId(), kikConn, *kikInput, clientConn)
+	go proxy(false, k.GetUserId(), kikConn, kikInput, clientConn)
 	proxy(true, k.GetUserId(), clientConn, clientInput, kikConn)
 }
 
@@ -377,7 +397,7 @@ func proxy(fromIsClient bool, userId string, from net.Conn, fromInput node.NodeI
 			errMessage := err.Error()
 
 			if strings.HasPrefix(errMessage, "XML syntax error") {
-				if strings.HasSuffix(errMessage, "unexpected end element </k>") {
+				if strings.HasSuffix(errMessage, "unexpected end element </k>") || strings.HasSuffix(errMessage, "unexpected EOF") {
 					// XML parser currently treats it like an error.
 					// Send it manually to properly close connection
 					to.Write([]byte("</k>"))
@@ -410,11 +430,7 @@ func proxy(fromIsClient bool, userId string, from net.Conn, fromInput node.NodeI
 	}
 }
 
-func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, *node.NodeInputStream, error) {
-	// Only support 1.2 for now.
-	// As of 1/5/24, Kik is abusing the protocol to DoS clients connecting through 1.3.
-	// Not sure if intentional, but this solves the problem.
-
+func DialKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, error) {
 	minVer := ConnectionInfo.MinTlsVersion
 	maxVer := ConnectionInfo.MaxTlsVersion
 
@@ -429,24 +445,24 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 		if !slices.Contains(interfaceIps, *payload.InterfaceIp) {
 			err := errors.New("Client requested to use unknown interface " +
 				*payload.InterfaceIp + ", aborting connection")
-			return nil, nil, err
+			return nil, err
 		}
 		netInterface, err := net.InterfaceByName(interfaceName)
 		if err != nil {
 			ifaces, netErr := net.Interfaces()
 			if netErr != nil {
-				return nil, nil, netErr
+				return nil, netErr
 			} else {
 				msg := "Missing interface, we can select from: "
 				for _, s := range ifaces {
 					msg += s.Name + ","
 				}
-				return nil, nil, errors.New(msg + " | " + err.Error())
+				return nil, errors.New(msg + " | " + err.Error())
 			}
 		}
 		addrs, err := netInterface.Addrs()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		var selectedIP net.IP
@@ -459,7 +475,7 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 			}
 		}
 		if selectedIP == nil {
-			return nil, nil, errors.New("Failed connecting via custom interface; '" + *payload.InterfaceIp + "' not found in " + interfaceName)
+			return nil, errors.New("Failed connecting via custom interface; '" + *payload.InterfaceIp + "' not found in " + interfaceName)
 		}
 
 		tcpAddr := &net.TCPAddr{
@@ -477,25 +493,9 @@ func connectToKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Con
 
 	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	kikConn.SetDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
-
-	_, err = kikConn.Write([]byte(payload.RawStanza))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	kikInput := node.NewNodeInputStream(kikConn)
-	kikResponse, err := node.ParseInitialStreamResponse(kikInput)
-	if err != nil {
-		return nil, nil, err
-	}
-	clientConn.Write([]byte(kikResponse.GenerateServerResponse(CUSTOM_BANNER)))
-	if !kikResponse.IsOk {
-		return nil, nil, errors.New("Kik rejected bind: " + kikResponse.RawStanza)
-	}
-	return kikConn, &kikInput, nil
+	return kikConn, nil
 }
 
 // This is a no-op if the client has an IPV6 address.
