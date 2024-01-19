@@ -247,7 +247,7 @@ func parseDelimitedFile(filePath string, collector *[]string) error {
 }
 
 func openSSLServer(port string, cert tls.Certificate) {
-	go ConnectionInfo.MonitorServerHealth()
+	// go ConnectionInfo.MonitorServerHealth()
 	config := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   SERVER_TLS_VERSION,
@@ -269,7 +269,7 @@ func openSSLServer(port string, cert tls.Certificate) {
 }
 
 func openPlainServer(port string) {
-	go ConnectionInfo.MonitorServerHealth()
+	// go ConnectionInfo.MonitorServerHealth()
 	server, err := net.Listen(SERVER_TYPE, ":"+port)
 	if err != nil {
 		log.Fatal("Error opening unencrypted socket:" + err.Error())
