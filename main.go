@@ -490,6 +490,15 @@ func DialKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, er
 			Timeout: KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
 		}
 	}
+	/*plainConn, err := net.DialTimeout(KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, dialer.Timeout)
+	if err != nil {
+		return nil, err
+	}
+	uTlsConn := tls.UClient(plainConn, &config, tls.HelloIOS_12_1)
+	err = uTlsConn.Handshake()
+	if err != nil {
+		return nil, err
+	}*/
 
 	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
 	if err != nil {
@@ -524,6 +533,7 @@ func BanHost(clientConn net.Conn) {
 	} else {
 		log.Println("Banned " + ip + ": " + string(stdout))
 	}
+	ConnectionInfo.RemoveAllConnectionsByIp(ip)
 }
 
 func IPv4toInt(ipv4 net.IP) (uint32, error) {

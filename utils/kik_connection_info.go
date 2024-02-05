@@ -32,7 +32,7 @@ type KikConnectionInfo struct {
 }
 
 const (
-	_DEFAULT_KIK_HOST = "talk15590an.kik.com"
+	_DEFAULT_KIK_HOST = "talk1600ip.kik.com"
 )
 
 func NewConnectionInfo() *KikConnectionInfo {
@@ -72,6 +72,18 @@ func (c *KikConnectionInfo) RemoveConnection(connId string) {
 	if ok {
 		conn.Close()
 		delete(c.Connections, connId)
+	}
+}
+
+func (c *KikConnectionInfo) RemoveAllConnectionsByIp(ip string) {
+	c.ConnectionMutex.Lock()
+	defer c.ConnectionMutex.Unlock()
+	for connId, conn := range c.Connections {
+		connIp, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+		if err == nil && ip == connIp {
+			conn.Close()
+			delete(c.Connections, connId)
+		}
 	}
 }
 
