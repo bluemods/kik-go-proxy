@@ -43,10 +43,10 @@ func NewConnectionInfo() *KikConnectionInfo {
 		// has a valid certificate for *.kik.com.
 		CerificateHost: _DEFAULT_KIK_HOST,
 
-		// Host from 15.59.x on Android. All of them resolve to the same IPs, but we will use a newer version anyway
+		// XMPP host to connect to
 		Host: strPointer(_DEFAULT_KIK_HOST),
-		// You can use port 443 or 5223 here, they behave the same
-		Port: strPointer("5223"),
+		// You can use port 443 or 5223 here
+		Port: strPointer("443"),
 
 		MinTlsVersion: intPointer(tls.VersionTLS12),
 		MaxTlsVersion: intPointer(tls.VersionTLS13),
@@ -193,6 +193,7 @@ func getCPUSample() (idle uint64, total uint64, err error) {
 				val, err := strconv.ParseUint(fields[i], 10, 64)
 				if err != nil {
 					fmt.Println("Error: ", i, fields[i], err)
+					continue
 				}
 				total += val // tally up all the numbers to get total ticks
 				if i == 4 {  // idle is the 5th field in the cpu line
