@@ -247,7 +247,6 @@ func parseDelimitedFile(filePath string, collector *[]string) error {
 }
 
 func openSSLServer(port string, cert tls.Certificate) {
-	// go ConnectionInfo.MonitorServerHealth()
 	config := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   SERVER_TLS_VERSION,
@@ -490,21 +489,7 @@ func DialKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, er
 			Timeout: KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
 		}
 	}
-	/*plainConn, err := net.DialTimeout(KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, dialer.Timeout)
-	if err != nil {
-		return nil, err
-	}
-	uTlsConn := tls.UClient(plainConn, &config, tls.HelloIOS_12_1)
-	err = uTlsConn.Handshake()
-	if err != nil {
-		return nil, err
-	}*/
-
-	kikConn, err := tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
-	if err != nil {
-		return nil, err
-	}
-	return kikConn, nil
+	return tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
 }
 
 // This is a no-op if the client has an IPV6 address.

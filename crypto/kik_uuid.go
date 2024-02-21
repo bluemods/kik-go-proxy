@@ -9,8 +9,7 @@ import (
 
 func GenerateUUID() string {
 	for {
-		id, _ := makeId(uuid.New())
-		if id != nil {
+		if id, _ := makeId(uuid.New()); id != nil {
 			return id.String()
 		}
 	}
