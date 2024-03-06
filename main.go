@@ -55,8 +55,6 @@ const (
 
 	API_KEY_MIN_LENGTH = 32
 	API_KEY_MAX_LENGTH = 256
-
-	CUSTOM_BANNER = false
 )
 
 var (
@@ -80,6 +78,8 @@ var (
 	autoBanHosts bool = false
 	antiSpam     bool = false
 
+	customBanner bool = false
+
 	// Holds a set of IPs that are banned
 	// or in the process of being banned.
 	// Field is thread safe.
@@ -100,10 +100,12 @@ func main() {
 	whitelistFile := flag.String("whitelist", "", "file containing JIDs / device IDs that do not require API key authentication, one per line")
 	banHosts := flag.Bool("ban", false, "if true, misbehaving clients are IP banned from the server using iptables")
 	antiSpamFlag := flag.Bool("spam", false, "if true, incoming spam will be intercepted and blocked")
+	customBannerFlag := flag.Bool("banner", false, "if true, the server sends back a 'server' header upon successful authentication")
 	flag.Parse()
 
 	autoBanHosts = *banHosts
 	antiSpam = *antiSpamFlag
+	customBanner = *customBannerFlag
 
 	if *iname != "" {
 		log.Println("Using custom interface name " + *iname)
@@ -309,7 +311,7 @@ func handleNewConnection(clientConn net.Conn) {
 		log.Println("Rejecting from " + ip + ": " + err.Error())
 		return
 	}
-	if !isExempted(k) && len(currentHashedApiKey) > 0 {
+	if !isWhitelisted(k) && len(currentHashedApiKey) > 0 {
 		apiKey := k.ApiKey
 		if apiKey == nil {
 			log.Println(ip + ": API key missing when required")
@@ -355,7 +357,7 @@ func handleNewConnection(clientConn net.Conn) {
 		log.Println("Failed to parse bind response: " + err.Error())
 		return
 	}
-	clientConn.Write([]byte(kikResponse.GenerateServerResponse(CUSTOM_BANNER)))
+	clientConn.Write([]byte(kikResponse.GenerateServerResponse(customBanner)))
 	if !kikResponse.IsOk {
 		log.Println("Kik rejected bind: " + kikResponse.RawStanza)
 		return
@@ -493,7 +495,7 @@ func DialKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, er
 }
 
 // This is a no-op if the client has an IPV6 address.
-// Rewrite the method if the code is changed to support IPV6.
+// Rewrite the method if the server is changed to accept IPV6 connections.
 func BanHost(clientConn net.Conn) {
 	if !autoBanHosts {
 		return
@@ -505,14 +507,13 @@ func BanHost(clientConn net.Conn) {
 		log.Printf("Can't ban IP %s; doesn't match IPV4 regex\n", ip)
 		return
 	}
-	ipInt, err := IPv4toInt(net.ParseIP(ip))
+	ipInt, err := ipv4ToInt(net.ParseIP(ip))
 	if err == nil && bannedIps.Add(ipInt) {
 		// IP is already banned or in the process of being banned, take no action
 		return
 	}
 
-	command := exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP")
-	stdout, err := command.Output()
+	stdout, err := exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP").Output()
 	if err != nil {
 		log.Println("Failed to ban " + ip + ": " + err.Error())
 	} else {
@@ -521,20 +522,13 @@ func BanHost(clientConn net.Conn) {
 	ConnectionInfo.RemoveAllConnectionsByIp(ip)
 }
 
-func IPv4toInt(ipv4 net.IP) (uint32, error) {
-	ipv4Bytes := ipv4.To4()
-	if ipv4Bytes == nil {
-		return 0, errors.New("not a valid IPv4 address")
+func ipv4ToInt(ip net.IP) (uint32, error) {
+	if ipv4 := ip.To4(); ipv4 != nil {
+		return binary.BigEndian.Uint32(ipv4), nil
 	}
-	return binary.BigEndian.Uint32(ipv4Bytes), nil
+	return 0, errors.New("not a valid IPv4 address")
 }
 
-func isExempted(k *node.InitialStreamTag) bool {
-	userId := k.GetUserId()
-	for _, item := range whitelist {
-		if item == userId {
-			return true
-		}
-	}
-	return false
+func isWhitelisted(k *node.InitialStreamTag) bool {
+	return slices.Contains(whitelist, k.GetUserId())
 }
