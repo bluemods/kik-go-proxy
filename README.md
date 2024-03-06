@@ -43,6 +43,7 @@ By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 | -a         | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header. |
 | -whitelist | file containing JIDs / device IDs that do not require API key authentication, one per line |
 | -ban       | If specified, misbehaving clients will be IP banned from the server using iptables         |
+| -banner    | If specified, the server sends back a 'server' header to the client upon successful authentication |
 
 ## Notices
 - On Unix systems, you might get errors like ```Error accepting:  accept tcp4 0.0.0.0:5222: accept4: too many open files```.<br> If you do, try [raising the ulimit.](https://stackoverflow.com/a/32325509)
