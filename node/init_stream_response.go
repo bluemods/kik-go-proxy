@@ -52,7 +52,7 @@ func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamRespons
 
 	var isOk bool = parser.Attribute("ok") == "1"
 	var timestamp int64 = 0
-	var stanza string
+	var stanza []byte
 
 	if isOk {
 		// Ok response, stream header does not close until the stream ends
@@ -74,5 +74,5 @@ func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamRespons
 	return &KikInitialStreamResponse{
 		IsOk:      isOk,
 		Timestamp: timestamp,
-		RawStanza: stanza}, nil
+		RawStanza: string(stanza)}, nil
 }

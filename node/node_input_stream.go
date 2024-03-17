@@ -2,10 +2,10 @@ package node
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"io"
 	"net"
-	"strings"
 
 	xpp "github.com/bluemods/kik-go-proxy/goxpp"
 )
@@ -21,7 +21,7 @@ type NodeInputStream struct {
 //
 // If successful, the node object and the raw stanza
 // will be returned in the first two values.
-func (input NodeInputStream) ReadNextStanza() (*Node, *string, error) {
+func (input NodeInputStream) ReadNextStanza() (*Node, *[]byte, error) {
 	parser := input.Parser
 	for {
 		event, err := parser.Next()
@@ -47,7 +47,7 @@ func (input NodeInputStream) ReadNextStanza() (*Node, *string, error) {
 func NewNodeInputStream(connection net.Conn) NodeInputStream {
 	reader := LoggingBufferedReader{
 		r:      bufio.NewReader(connection),
-		Buffer: new(strings.Builder),
+		Buffer: new(bytes.Buffer),
 	}
 	cr := func(charset string, input io.Reader) (io.Reader, error) {
 		return input, nil
@@ -61,7 +61,7 @@ func NewNodeInputStream(connection net.Conn) NodeInputStream {
 // Sits on top of the real reader so we can log the raw XMPP
 type LoggingBufferedReader struct {
 	r      io.Reader
-	Buffer *strings.Builder
+	Buffer *bytes.Buffer
 }
 
 func (r LoggingBufferedReader) Read(p []byte) (n int, err error) {
@@ -72,8 +72,8 @@ func (r LoggingBufferedReader) Read(p []byte) (n int, err error) {
 	return nRead, nError
 }
 
-func (r LoggingBufferedReader) GetBuffer() string {
-	buffer := r.Buffer.String()
+func (r LoggingBufferedReader) GetBuffer() []byte {
+	buffer := r.Buffer.Bytes()
 	r.ClearBuffer()
 	return buffer
 }

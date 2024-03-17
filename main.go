@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -288,11 +287,9 @@ func openPlainServer(port string) {
 }
 
 func handleNewConnection(clientConn net.Conn) {
+	defer clientConn.Close()
 	connId := ConnectionInfo.AddConnection(clientConn)
-	defer func() {
-		ConnectionInfo.RemoveConnection(connId)
-		clientConn.Close()
-	}()
+	defer ConnectionInfo.RemoveConnection(connId)
 
 	ip, _, err := net.SplitHostPort(clientConn.RemoteAddr().String())
 	if err != nil {
@@ -352,6 +349,7 @@ func handleNewConnection(clientConn net.Conn) {
 	}
 
 	kikInput := node.NewNodeInputStream(kikConn)
+	defer kikInput.Reader.ClearBuffer()
 	kikResponse, err := node.ParseInitialStreamResponse(kikInput)
 	if err != nil {
 		log.Println("Failed to parse bind response: " + err.Error())
@@ -364,71 +362,22 @@ func handleNewConnection(clientConn net.Conn) {
 	}
 
 	clientInput := node.NewNodeInputStream(clientConn)
+	defer clientInput.Reader.ClearBuffer()
 
-	go proxy(false, k.GetUserId(), kikConn, kikInput, clientConn)
-	proxy(true, k.GetUserId(), clientConn, clientInput, kikConn)
-}
-
-func proxy(fromIsClient bool, userId string, from net.Conn, fromInput node.NodeInputStream, to net.Conn) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("proxy loop panicked (fromIsClient=%t, userId=%s, buffer=%s)\n%s\n",
-				fromIsClient, userId, fromInput.Reader.GetBuffer(), r)
-			debug.PrintStack()
-			from.Close()
-			to.Close()
-		} else {
-			fromInput.Reader.ClearBuffer()
-		}
-	}()
-
-	var rateLimiter *ratelimit.KikRateLimiter = nil
-	if !fromIsClient && antiSpam {
+	var rateLimiter *ratelimit.KikRateLimiter
+	if antiSpam {
 		rateLimiter = ratelimit.CreateRateLimiter()
 	}
 
-	for {
-		from.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
-		node, stanza, err := fromInput.ReadNextStanza()
-
-		if err != nil {
-			if rateLimiter != nil {
-				rateLimiter.FlushMessages(from)
-			}
-			errMessage := err.Error()
-
-			if strings.HasPrefix(errMessage, "XML syntax error") {
-				if strings.HasSuffix(errMessage, "unexpected end element </k>") || strings.HasSuffix(errMessage, "unexpected EOF") {
-					// XML parser currently treats it like an error.
-					// Send it manually to properly close connection
-					to.Write([]byte("</k>"))
-				} else {
-					// Log unexpected XML parsing errors
-					log.Println(
-						"Unexpected XML parsing error:\n" +
-							err.Error() + "\nStanza:\n" + fromInput.Reader.GetBuffer())
-				}
-			}
-			return
-		}
-
-		if rateLimiter != nil {
-			blocked := rateLimiter.ProcessMessage(from, *node)
-			if blocked {
-				continue
-			}
-		}
-
-		to.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT_SECONDS * time.Second))
-		_, err = to.Write([]byte(*stanza))
-		if err != nil {
-			if errors.Is(err, os.ErrDeadlineExceeded) {
-				log.Printf("Write deadline exceeded. packetSize=%d, isClient=%t\n",
-					len(*stanza), fromIsClient)
-			}
-			return
-		}
+	c := &KikProxyConnection{
+		UserId:      k.GetUserId(),
+		ClientConn:  clientConn,
+		ClientInput: clientInput,
+		KikConn:     kikConn,
+		KikInput:    kikInput,
+		RateLimiter: rateLimiter,
 	}
+	c.Run() // Blocks until connection is complete
 }
 
 func DialKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, error) {
