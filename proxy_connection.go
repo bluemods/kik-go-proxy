@@ -27,22 +27,23 @@ type KikProxyConnection struct {
 	RateLimiter *ratelimit.KikRateLimiter
 
 	IsConnected atomic.Bool
-
-	sync.WaitGroup
 }
 
 // This routine blocks until the connection is finished.
-//
-// Note that this currently uses 3 goroutines, it should use 2.
 func (c *KikProxyConnection) Run() {
-	c.Add(2)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
 	c.IsConnected.Store(true)
 	c.ClientConn.SetDeadline(time.Time{})
 	c.KikConn.SetDeadline(time.Time{})
 
-	go c.clientThread()
-	go c.kikThread()
-	c.Wait()
+	go func() {
+		c.clientThread()
+		wg.Done()
+	}()
+	c.kikThread()
+	wg.Wait() // Wait for client thread to finish
 }
 
 // Processes incoming stanzas from the client and forwards them to Kik.
@@ -103,7 +104,6 @@ func (c *KikProxyConnection) kikThread() {
 
 func (c *KikProxyConnection) onThreadFinished(isClientThread bool, input node.NodeInputStream) func() {
 	return func() {
-		defer c.Done()
 		if r := recover(); r != nil {
 			log.Printf("ProxyConnection panic (isClientThread=%t, userId=%s, buf=%s)\n%s\n",
 				isClientThread,
