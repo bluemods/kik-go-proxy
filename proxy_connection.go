@@ -39,8 +39,8 @@ func (c *KikProxyConnection) Run() {
 	c.KikConn.SetDeadline(time.Time{})
 
 	go func() {
+		defer wg.Done()
 		c.clientThread()
-		wg.Done()
 	}()
 	c.kikThread()
 	wg.Wait() // Wait for client thread to finish

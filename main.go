@@ -342,8 +342,7 @@ func handleNewConnection(clientConn net.Conn) {
 
 	kikConn.SetDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 
-	_, err = kikConn.Write([]byte(k.RawStanza))
-	if err != nil {
+	if _, err = kikConn.Write([]byte(k.RawStanza)); err != nil {
 		log.Println("Failed to write bind stanza: " + err.Error())
 		return
 	}

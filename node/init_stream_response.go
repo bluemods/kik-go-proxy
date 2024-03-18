@@ -1,6 +1,7 @@
 package node
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
@@ -44,6 +45,10 @@ func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamRespons
 		event, err := parser.Next()
 		if err != nil {
 			return nil, err
+		}
+		if event == xpp.EndDocument {
+			return nil, errors.New(
+				"end of document reached before start of initial stream response")
 		}
 		if event == xpp.StartTag && parser.Name == "k" {
 			break
