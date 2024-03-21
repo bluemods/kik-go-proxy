@@ -35,6 +35,11 @@ type KikProxyConnection struct {
 
 // This routine blocks until the connection is finished.
 func (c *KikProxyConnection) Run() {
+	defer func() {
+		if c.Logger != nil {
+			c.Logger.Close()
+		}
+	}()
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
