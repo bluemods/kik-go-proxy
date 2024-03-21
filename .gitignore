@@ -1,6 +1,7 @@
 # Built executables
 kik-go-proxy*
 
+_config
 config
 
 *.exe

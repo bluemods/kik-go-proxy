@@ -29,7 +29,7 @@ import (
 
 var (
 	API_KEY_REGEX *regexp.Regexp = regexp.MustCompile(fmt.Sprintf(
-		"^[A-Za-z0-9._-]{%d,%d}%%",
+		"^[A-Za-z0-9._-]{%d,%d}$",
 		constants.API_KEY_MIN_LENGTH,
 		constants.API_KEY_MAX_LENGTH))
 
