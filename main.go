@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
-	"encoding/binary"
 	"encoding/pem"
 	"errors"
 	"flag"
@@ -13,56 +12,25 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bluemods/kik-go-proxy/antispam"
+	"github.com/bluemods/kik-go-proxy/connection"
+	"github.com/bluemods/kik-go-proxy/constants"
 	"github.com/bluemods/kik-go-proxy/node"
 	"github.com/bluemods/kik-go-proxy/ratelimit"
 	"github.com/bluemods/kik-go-proxy/utils"
 	"golang.org/x/crypto/pkcs12"
 )
 
-const (
-	// Default plaintext port
-	PLAIN_SERVER_PORT = "5222"
-	// Default SSL port
-	SSL_SERVER_PORT = "5223"
-	// Listen on IPV4. Kik requires IPV4 so it should be no issue
-	SERVER_TYPE = "tcp4"
-	// Client has this long to prove itself
-	CLIENT_INITIAL_READ_TIMEOUT_SECONDS = 3
-	// After initial read, abort if no data from client after this many seconds
-	CLIENT_READ_TIMEOUT_SECONDS = 60 * 10
-
-	// Kik uses TCP
-	KIK_SERVER_TYPE = "tcp"
-	// Abort if Kik takes longer than this to send back the initial response
-	KIK_INITIAL_READ_TIMEOUT_SECONDS = 5
-	// Abort if a write call takes longer than this
-	WRITE_TIMEOUT_SECONDS = 15
-
-	// TLSv1.2 is recommended for compatibility reasons.
-	// If you don't need to support 1.2 clients, change to `tls.VersionTLS13`
-	// DO NOT use lower than 1.2, as older protocols contain security flaws.
-	SERVER_TLS_VERSION = tls.VersionTLS12
-
-	DEFAULT_INTERFACE_NAME = "eth0"
-
-	API_KEY_MIN_LENGTH = 32
-	API_KEY_MAX_LENGTH = 256
-)
-
 var (
-	API_KEY_REGEX *regexp.Regexp = regexp.MustCompile("^[A-Za-z0-9._-]{" + strconv.Itoa(API_KEY_MIN_LENGTH) + "," + strconv.Itoa(API_KEY_MAX_LENGTH) + "}$")
-	IPV4_REGEX    *regexp.Regexp = regexp.MustCompile(
-		`^((25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9])\.` +
-			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
-			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
-			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[0-9]))$`)
+	API_KEY_REGEX *regexp.Regexp = regexp.MustCompile(fmt.Sprintf(
+		"^[A-Za-z0-9._-]{%d,%d}%%",
+		constants.API_KEY_MIN_LENGTH,
+		constants.API_KEY_MAX_LENGTH))
 
 	// We store this as a SHA-256 hash for security purposes.
 	// You can start the server, delete the file,
@@ -70,19 +38,14 @@ var (
 	currentHashedApiKey []byte = make([]byte, 0)
 
 	interfaceIps  []string = make([]string, 0)
-	interfaceName string   = DEFAULT_INTERFACE_NAME
+	interfaceName string   = constants.DEFAULT_INTERFACE_NAME
 
-	whitelist []string = make([]string, 0)
+	whitelist map[string]struct{} = map[string]struct{}{}
 
 	autoBanHosts bool = false
 	antiSpam     bool = false
 
 	customBanner bool = false
-
-	// Holds a set of IPs that are banned
-	// or in the process of being banned.
-	// Field is thread safe.
-	bannedIps *utils.ConcurrentSet[uint32] = utils.NewConcurrentSet[uint32]()
 
 	ConnectionInfo *utils.KikConnectionInfo = utils.NewConnectionInfo()
 )
@@ -114,11 +77,15 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed parsing API key file: ", err.Error())
 	}
-	err = parseDelimitedFile(*ipFile, &interfaceIps)
+	err = parseDelimitedFile(*ipFile, func(ip string) {
+		interfaceIps = append(interfaceIps, ip)
+	})
 	if err != nil {
 		log.Fatal("Failed parsing interface file: ", err.Error())
 	}
-	err = parseDelimitedFile(*whitelistFile, &whitelist)
+	err = parseDelimitedFile(*whitelistFile, func(userId string) {
+		whitelist[userId] = struct{}{}
+	})
 	if err != nil {
 		log.Fatal("Failed parsing whitelist file: ", err.Error())
 	}
@@ -129,7 +96,7 @@ func main() {
 			log.Fatal("Error loading .p12 certificate:", err.Error())
 		}
 		if *port == "" {
-			openSSLServer(SSL_SERVER_PORT, *cert)
+			openSSLServer(constants.SSL_SERVER_PORT, *cert)
 		} else {
 			openSSLServer(*port, *cert)
 		}
@@ -139,13 +106,13 @@ func main() {
 			log.Fatal("Error loading key pair: ", err.Error())
 		}
 		if *port == "" {
-			openSSLServer(SSL_SERVER_PORT, cert)
+			openSSLServer(constants.SSL_SERVER_PORT, cert)
 		} else {
 			openSSLServer(*port, cert)
 		}
 	} else {
 		if *port == "" {
-			openPlainServer(PLAIN_SERVER_PORT)
+			openPlainServer(constants.PLAIN_SERVER_PORT)
 		} else {
 			openPlainServer(*port)
 		}
@@ -217,7 +184,7 @@ func hashApiKey(key string) []byte {
 	return h[:]
 }
 
-func parseDelimitedFile(filePath string, collector *[]string) error {
+func parseDelimitedFile(filePath string, collector func(string)) error {
 	if filePath == "" {
 		return nil
 	}
@@ -239,7 +206,7 @@ func parseDelimitedFile(filePath string, collector *[]string) error {
 			line = line[:i]
 		}
 		line = strings.Trim(line, " ")
-		*collector = append(*collector, line)
+		collector(line)
 	}
 	if err := scanner.Err(); err != nil {
 		return err
@@ -250,9 +217,9 @@ func parseDelimitedFile(filePath string, collector *[]string) error {
 func openSSLServer(port string, cert tls.Certificate) {
 	config := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		MinVersion:   SERVER_TLS_VERSION,
+		MinVersion:   constants.SERVER_TLS_VERSION,
 	}
-	server, err := tls.Listen(SERVER_TYPE, ":"+port, config)
+	server, err := tls.Listen(constants.SERVER_TYPE, ":"+port, config)
 	if err != nil {
 		log.Fatal("Error opening SSL socket: ", err.Error())
 	}
@@ -270,7 +237,7 @@ func openSSLServer(port string, cert tls.Certificate) {
 
 func openPlainServer(port string) {
 	// go ConnectionInfo.MonitorServerHealth()
-	server, err := net.Listen(SERVER_TYPE, ":"+port)
+	server, err := net.Listen(constants.SERVER_TYPE, ":"+port)
 	if err != nil {
 		log.Fatal("Error opening unencrypted socket:" + err.Error())
 	}
@@ -298,12 +265,12 @@ func handleNewConnection(clientConn net.Conn) {
 		return
 	}
 
-	clientConn.SetReadDeadline(time.Now().Add(CLIENT_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+	clientConn.SetReadDeadline(time.Now().Add(constants.CLIENT_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 	k, shouldBan, err := node.ParseInitialStreamTag(clientConn)
 
 	if err != nil {
 		if shouldBan {
-			BanHost(clientConn)
+			banIp(ip)
 		}
 		log.Println("Rejecting from " + ip + ": " + err.Error())
 		return
@@ -312,12 +279,12 @@ func handleNewConnection(clientConn net.Conn) {
 		apiKey := k.ApiKey
 		if apiKey == nil {
 			log.Println(ip + ": API key missing when required")
-			BanHost(clientConn)
+			banIp(ip)
 			return
 		}
-		if len(*apiKey) < API_KEY_MIN_LENGTH || len(*apiKey) > API_KEY_MAX_LENGTH {
+		if len(*apiKey) < constants.API_KEY_MIN_LENGTH || len(*apiKey) > constants.API_KEY_MAX_LENGTH {
 			log.Println(ip + ": Invalid API key length")
-			BanHost(clientConn)
+			banIp(ip)
 			return
 		}
 		userHashedApiKey := hashApiKey(*apiKey)
@@ -326,21 +293,21 @@ func handleNewConnection(clientConn net.Conn) {
 		// Hashes always are the same length so ConstantTimeEq is unnecessary
 		if subtle.ConstantTimeCompare(userHashedApiKey, currentHashedApiKey) != 1 {
 			log.Println(ip + ": API key mismatch")
-			BanHost(clientConn)
+			banIp(ip)
 			return
 		}
 	}
 
 	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ip)
 
-	kikConn, err := DialKik(clientConn, k)
+	kikConn, err := dialKik(k)
 	if err != nil {
 		log.Println("Failed to dial " + ip + " to Kik: " + err.Error())
 		return
 	}
 	defer kikConn.Close()
 
-	kikConn.SetDeadline(time.Now().Add(KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
+	kikConn.SetDeadline(time.Now().Add(constants.KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 
 	if _, err = kikConn.Write([]byte(k.RawStanza)); err != nil {
 		log.Println("Failed to write bind stanza: " + err.Error())
@@ -368,7 +335,7 @@ func handleNewConnection(clientConn net.Conn) {
 		rateLimiter = ratelimit.CreateRateLimiter()
 	}
 
-	c := &KikProxyConnection{
+	c := &connection.KikProxyConnection{
 		UserId:      k.GetUserId(),
 		ClientConn:  clientConn,
 		ClientInput: clientInput,
@@ -379,7 +346,7 @@ func handleNewConnection(clientConn net.Conn) {
 	c.Run() // Blocks until connection is complete
 }
 
-func DialKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, error) {
+func dialKik(payload *node.InitialStreamTag) (*tls.Conn, error) {
 	minVer := ConnectionInfo.MinTlsVersion
 	maxVer := ConnectionInfo.MaxTlsVersion
 
@@ -432,51 +399,24 @@ func DialKik(clientConn net.Conn, payload *node.InitialStreamTag) (*tls.Conn, er
 		}
 		dialer = net.Dialer{
 			LocalAddr: tcpAddr,
-			Timeout:   KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
+			Timeout:   constants.KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
 		}
 	} else {
 		dialer = net.Dialer{
-			Timeout: KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
+			Timeout: constants.KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
 		}
 	}
-	return tls.DialWithDialer(&dialer, KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
-}
-
-// This is a no-op if the client has an IPV6 address.
-// Rewrite the method if the server is changed to accept IPV6 connections.
-func BanHost(clientConn net.Conn) {
-	if !autoBanHosts {
-		return
-	}
-	ip, _, _ := net.SplitHostPort(clientConn.RemoteAddr().String())
-	if !IPV4_REGEX.MatchString(ip) {
-		// This is ultra defensive programming
-		// to make sure no bad values can be passed to the command
-		log.Printf("Can't ban IP %s; doesn't match IPV4 regex\n", ip)
-		return
-	}
-	ipInt, err := ipv4ToInt(net.ParseIP(ip))
-	if err == nil && bannedIps.Add(ipInt) {
-		// IP is already banned or in the process of being banned, take no action
-		return
-	}
-
-	stdout, err := exec.Command("iptables", "-A", "INPUT", "-s", ip, "-j", "DROP").Output()
-	if err != nil {
-		log.Println("Failed to ban " + ip + ": " + err.Error())
-	} else {
-		log.Println("Banned " + ip + ": " + string(stdout))
-	}
-	ConnectionInfo.RemoveAllConnectionsByIp(ip)
-}
-
-func ipv4ToInt(ip net.IP) (uint32, error) {
-	if ipv4 := ip.To4(); ipv4 != nil {
-		return binary.BigEndian.Uint32(ipv4), nil
-	}
-	return 0, errors.New("not a valid IPv4 address")
+	return tls.DialWithDialer(&dialer, constants.KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
 }
 
 func isWhitelisted(k *node.InitialStreamTag) bool {
-	return slices.Contains(whitelist, k.GetUserId())
+	_, ok := whitelist[k.GetUserId()]
+	return ok
+}
+
+func banIp(ip string) {
+	if autoBanHosts {
+		antispam.BanIpAddress(ip)
+		ConnectionInfo.RemoveAllConnectionsByIp(ip)
+	}
 }

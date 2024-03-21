@@ -48,6 +48,3 @@ By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 ## Notices
 - On Unix systems, you might get errors like ```Error accepting:  accept tcp4 0.0.0.0:5222: accept4: too many open files```.<br> If you do, try [raising the ulimit.](https://stackoverflow.com/a/32325509)
 - If running this on a public facing server without the -a argument, it is an open proxy. Make sure to configure your firewall to only allow trusted IPs.
-
-## TODOs
-- Log XMPP to file

@@ -1,4 +1,4 @@
-package main
+package connection
 
 import (
 	"errors"
@@ -11,12 +11,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bluemods/kik-go-proxy/constants"
 	"github.com/bluemods/kik-go-proxy/node"
 	"github.com/bluemods/kik-go-proxy/ratelimit"
 )
 
 type KikProxyConnection struct {
-	UserId string
+	UserId   string
+	IsAuthed bool
 
 	ClientConn  net.Conn
 	ClientInput node.NodeInputStream
@@ -27,6 +29,8 @@ type KikProxyConnection struct {
 	RateLimiter *ratelimit.KikRateLimiter
 
 	IsConnected atomic.Bool
+
+	Logger *XmppLogger
 }
 
 // This routine blocks until the connection is finished.
@@ -56,15 +60,18 @@ func (c *KikProxyConnection) clientThread() {
 	defer c.onThreadFinished(isClientThread, input)()
 
 	for c.IsConnected.Load() {
-		readConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
+		readConn.SetReadDeadline(time.Now().Add(constants.CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 		_, stanza, err := input.ReadNextStanza()
 
 		if err != nil {
 			c.handleReadError(err, input, writeConn)
 			return
 		}
+		if c.Logger != nil {
+			c.Logger.OnNewStanza(*stanza, true)
+		}
 
-		writeConn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT_SECONDS * time.Second))
+		writeConn.SetWriteDeadline(time.Now().Add(constants.WRITE_TIMEOUT_SECONDS * time.Second))
 		if _, err = writeConn.Write(*stanza); err != nil {
 			c.handleWriteError(err, *stanza, isClientThread)
 			return
@@ -72,6 +79,7 @@ func (c *KikProxyConnection) clientThread() {
 	}
 }
 
+// Processes incoming stanzas from Kik and forwards them to the client.
 func (c *KikProxyConnection) kikThread() {
 	isClientThread := false
 	readConn := c.KikConn
@@ -82,19 +90,22 @@ func (c *KikProxyConnection) kikThread() {
 	defer c.onThreadFinished(isClientThread, input)()
 
 	for c.IsConnected.Load() {
-		readConn.SetReadDeadline(time.Now().Add(CLIENT_READ_TIMEOUT_SECONDS * time.Second))
+		readConn.SetReadDeadline(time.Now().Add(constants.CLIENT_READ_TIMEOUT_SECONDS * time.Second))
 		node, stanza, err := input.ReadNextStanza()
 
 		if err != nil {
 			c.handleReadError(err, input, writeConn)
 			return
 		}
+		if c.Logger != nil {
+			c.Logger.OnNewStanza(*stanza, false)
+		}
 
 		if rateLimiter != nil && rateLimiter.ProcessMessage(readConn, *node) {
 			continue
 		}
 
-		writeConn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT_SECONDS * time.Second))
+		writeConn.SetWriteDeadline(time.Now().Add(constants.WRITE_TIMEOUT_SECONDS * time.Second))
 		if _, err = writeConn.Write(*stanza); err != nil {
 			c.handleWriteError(err, *stanza, isClientThread)
 			return
