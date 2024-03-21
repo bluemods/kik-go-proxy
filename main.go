@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -236,7 +237,6 @@ func openSSLServer(port string, cert tls.Certificate) {
 }
 
 func openPlainServer(port string) {
-	// go ConnectionInfo.MonitorServerHealth()
 	server, err := net.Listen(constants.SERVER_TYPE, ":"+port)
 	if err != nil {
 		log.Fatal("Error opening unencrypted socket:" + err.Error())
@@ -334,6 +334,12 @@ func handleNewConnection(clientConn net.Conn) {
 	if antiSpam {
 		rateLimiter = ratelimit.CreateRateLimiter()
 	}
+	var logger *connection.XmppLogger
+	if isXmppLoggerEligible(k) {
+		// TODO output destination process is outstanding
+		outPath := filepath.Join("xmpp", filepath.Clean(k.GetUserId()))
+		logger, _ = connection.NewXmppLogger(outPath)
+	}
 
 	c := &connection.KikProxyConnection{
 		UserId:      k.GetUserId(),
@@ -342,6 +348,7 @@ func handleNewConnection(clientConn net.Conn) {
 		KikConn:     kikConn,
 		KikInput:    kikInput,
 		RateLimiter: rateLimiter,
+		Logger:      logger,
 	}
 	c.Run() // Blocks until connection is complete
 }
@@ -407,6 +414,11 @@ func dialKik(payload *node.InitialStreamTag) (*tls.Conn, error) {
 		}
 	}
 	return tls.DialWithDialer(&dialer, constants.KIK_SERVER_TYPE, *ConnectionInfo.Host+":"+*ConnectionInfo.Port, &config)
+}
+
+func isXmppLoggerEligible(k *node.InitialStreamTag) bool {
+	// TODO eligibility determination process is outstanding
+	return false
 }
 
 func isWhitelisted(k *node.InitialStreamTag) bool {
