@@ -338,11 +338,14 @@ func handleNewConnection(clientConn net.Conn) {
 	if isXmppLoggerEligible(k) {
 		// TODO output destination process is outstanding
 		outPath := filepath.Join("xmpp", filepath.Clean(k.GetUserId()))
-		logger, _ = connection.NewXmppLogger(outPath)
+		if logger, err = connection.NewXmppLogger(outPath); err != nil {
+			log.Println("failed to create logger: " + outPath)
+		}
 	}
 
 	c := &connection.KikProxyConnection{
 		UserId:      k.GetUserId(),
+		IsAuthed:    k.IsAuth,
 		ClientConn:  clientConn,
 		ClientInput: clientInput,
 		KikConn:     kikConn,
