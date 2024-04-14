@@ -66,6 +66,8 @@ func main() {
 	customBannerFlag := flag.Bool("banner", false, "if true, the server sends back a 'server' header upon successful authentication")
 	flag.Parse()
 
+	// profiling.OpenProfileServer("40001")
+
 	autoBanHosts = *banHosts
 	antiSpam = *antiSpamFlag
 	customBanner = *customBannerFlag
@@ -298,14 +300,18 @@ func handleNewConnection(clientConn net.Conn) {
 		}
 	}
 
-	log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ip)
-
 	kikConn, err := dialKik(k)
 	if err != nil {
-		log.Println("Failed to dial " + ip + " to Kik: " + err.Error())
+		log.Println("Failed to dial " + k.GetUserId() + " to Kik (IP:" + ip + "): " + err.Error())
 		return
 	}
 	defer kikConn.Close()
+
+	if kikConn.LocalAddr() != nil {
+		log.Printf("Accepting %s (%s <=> %s)\n", k.GetUserId(), ip, kikConn.LocalAddr())
+	} else {
+		log.Printf("Accepting %s (IP: %s)\n", k.GetUserId(), ip)
+	}
 
 	kikConn.SetDeadline(time.Now().Add(constants.KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 

@@ -11,7 +11,7 @@ import (
 )
 
 type NodeInputStream struct {
-	Reader LoggingBufferedReader
+	Reader *LoggingBufferedReader
 	Parser xpp.XMLPullParser
 }
 
@@ -45,9 +45,9 @@ func (input NodeInputStream) ReadNextStanza() (*Node, *[]byte, error) {
 
 // Create a XMLPullParser for a long-lived input stream.
 func NewNodeInputStream(connection net.Conn) NodeInputStream {
-	reader := LoggingBufferedReader{
-		r:      bufio.NewReader(connection),
-		Buffer: new(bytes.Buffer),
+	reader := &LoggingBufferedReader{
+		r:   bufio.NewReader(connection),
+		buf: new(bytes.Buffer),
 	}
 	cr := func(charset string, input io.Reader) (io.Reader, error) {
 		return input, nil
@@ -60,24 +60,33 @@ func NewNodeInputStream(connection net.Conn) NodeInputStream {
 
 // Sits on top of the real reader so we can log the raw XMPP
 type LoggingBufferedReader struct {
-	r      io.Reader
-	Buffer *bytes.Buffer
+	r   io.Reader
+	buf *bytes.Buffer
 }
 
-func (r LoggingBufferedReader) Read(p []byte) (n int, err error) {
+func (r *LoggingBufferedReader) Read(p []byte) (n int, err error) {
 	nRead, nError := r.r.Read(p)
 	if nRead > 0 {
-		r.Buffer.Write(p[0:nRead])
+		r.buf.Write(p[0:nRead])
 	}
 	return nRead, nError
 }
 
-func (r LoggingBufferedReader) GetBuffer() []byte {
-	buffer := r.Buffer.Bytes()
+func (r *LoggingBufferedReader) GetBuffer() []byte {
+	buffer := r.buf.Bytes()
 	r.ClearBuffer()
 	return buffer
 }
 
-func (r LoggingBufferedReader) ClearBuffer() {
-	r.Buffer.Reset()
+func (r *LoggingBufferedReader) ClearBuffer() {
+	r.buf.Reset()
+
+	// Recreate buf if the previous stanza read was large in size.
+	// Without this, the unused large buffer remains in
+	// memory for the lifetime of the stream and may not be GCed for hours.
+	// This way, it is quickly freed, at the cost of slightly increased CPU effort
+	// due to more grow() calls being required.
+	if r.buf.Cap() >= 4096 {
+		r.buf = new(bytes.Buffer)
+	}
 }
