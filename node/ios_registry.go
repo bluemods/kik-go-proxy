@@ -1,5 +1,7 @@
 package node
 
+import "crypto/tls"
+
 // The implementation for this interface is not publicly provided.
 // To implement this interface, do the following:
 //
@@ -20,6 +22,11 @@ package node
 //		Transformer = &IosPacketTransformerImpl{}
 //	 }
 type IosPacketTransformer interface {
+	// Dials the XMPP server using the InitialStreamTag from the client as context.
+	// Here you can use a custom domain, chain proxies, etc.
+	// You should not read from or write to the socket, the server handles this already.
+	Dial(InitialStreamTag) (*tls.Conn, error)
+
 	// Transforms a stream init tag to iOS format.
 	MakeStreamInitTag(InitialStreamTag) string
 

@@ -369,6 +369,9 @@ func handleNewConnection(clientConn net.Conn) {
 }
 
 func dialKik(payload *node.InitialStreamTag) (*tls.Conn, error) {
+	if iosMode && node.IosTransformer != nil {
+		return node.IosTransformer.Dial(*payload)
+	}
 	minVer := ConnectionInfo.MinTlsVersion
 	maxVer := ConnectionInfo.MaxTlsVersion
 
