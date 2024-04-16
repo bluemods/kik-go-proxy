@@ -28,6 +28,9 @@ type IosPacketTransformer interface {
 
 	// Translates a sign up request to iOS format.
 	// MakeSignUpXml() string
+
+	// Translates an outgoing message stanza to iOS format.
+	// TransformMessageStanza() string
 }
 
 var (
