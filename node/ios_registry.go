@@ -15,6 +15,7 @@ package node
 //
 //	 // implement all funcs here...
 //
+//	 // init is a special method that is automatically called by the runtime
 //	 func init() {
 //		Transformer = &IosPacketTransformerImpl{}
 //	 }

@@ -65,7 +65,7 @@ func main() {
 	banHosts := flag.Bool("ban", false, "if true, misbehaving clients are IP banned from the server using iptables")
 	antiSpamFlag := flag.Bool("spam", false, "if true, incoming spam will be intercepted and blocked")
 	customBannerFlag := flag.Bool("banner", false, "if true, the server sends back a 'server' header upon successful authentication")
-	iosModeFlag := flag.Bool("ios", false, "if true, the server will transform packets to the iOS protocol. Note that this will not work out of the box, you must code it yourseld (see ios_registry.go)")
+	iosModeFlag := flag.Bool("ios", false, "if true, the server will transform packets to the iOS protocol. Note that this will not work out of the box, you must code it yourself (see ios_registry.go)")
 	flag.Parse()
 
 	// profiling.OpenProfileServer("40001")
