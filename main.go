@@ -47,6 +47,7 @@ var (
 	antiSpam     bool = false
 
 	customBanner bool = false
+	iosMode      bool = false
 
 	ConnectionInfo *utils.KikConnectionInfo = utils.NewConnectionInfo()
 )
@@ -64,6 +65,7 @@ func main() {
 	banHosts := flag.Bool("ban", false, "if true, misbehaving clients are IP banned from the server using iptables")
 	antiSpamFlag := flag.Bool("spam", false, "if true, incoming spam will be intercepted and blocked")
 	customBannerFlag := flag.Bool("banner", false, "if true, the server sends back a 'server' header upon successful authentication")
+	iosModeFlag := flag.Bool("ios", false, "if true, the server will transform packets to the iOS protocol. Note that this will not work out of the box, you must code it yourseld (see ios_registry.go)")
 	flag.Parse()
 
 	// profiling.OpenProfileServer("40001")
@@ -71,6 +73,7 @@ func main() {
 	autoBanHosts = *banHosts
 	antiSpam = *antiSpamFlag
 	customBanner = *customBannerFlag
+	iosMode = *iosModeFlag
 
 	if *iname != "" {
 		log.Println("Using custom interface name " + *iname)
@@ -315,7 +318,7 @@ func handleNewConnection(clientConn net.Conn) {
 
 	kikConn.SetDeadline(time.Now().Add(constants.KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 
-	if _, err = kikConn.Write([]byte(k.RawStanza)); err != nil {
+	if _, err = kikConn.Write([]byte(k.GenerateStreamInitTag(iosMode))); err != nil {
 		log.Println("Failed to write bind stanza: " + err.Error())
 		return
 	}

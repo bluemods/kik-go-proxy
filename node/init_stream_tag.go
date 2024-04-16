@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"log"
 	"net"
 	"strings"
 
@@ -41,12 +42,28 @@ type InitialStreamTag struct {
 	ApiKey *string
 }
 
+// Returns a unique identifier for the connecting client.
+// For authed connections, this is the JID
+// For anon connections, this is the Device ID (with prefix)
 func (k InitialStreamTag) GetUserId() string {
 	if k.IsAuth {
 		return k.Jid.GetIdentifier()
 	} else {
 		return k.DeviceId.Prefix + k.DeviceId.Id
 	}
+}
+
+// Generates the stream init tag initally written to the outbound socket to Kik.
+func (k InitialStreamTag) GenerateStreamInitTag(iosMode bool) string {
+	if iosMode {
+		if IosTransformer == nil {
+			log.Println("iosMode specified but there is no implementation registered. Using client generated tag.")
+			return k.RawStanza
+		} else {
+			return IosTransformer.MakeStreamInitTag(k)
+		}
+	}
+	return k.RawStanza
 }
 
 // Parses and verifies the initial stream tag from the client.

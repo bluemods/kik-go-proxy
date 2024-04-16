@@ -28,4 +28,7 @@ config
 # Go workspace file
 go.work
 
+# Do not commit the impl to public repo
+ios_transformer.go
+
 .DS_Store
