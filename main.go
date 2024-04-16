@@ -95,6 +95,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed parsing whitelist file: ", err.Error())
 	}
+	if iosMode {
+		log.Println("Using iOS mode")
+	}
 
 	if *p12File != "" && *p12PasswordFile != "" {
 		cert, err := loadP12Cert(*p12File, *p12PasswordFile)
