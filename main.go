@@ -233,7 +233,7 @@ func openSSLServer(port string, cert tls.Certificate) {
 		log.Fatal("Error opening SSL socket: ", err.Error())
 	}
 	defer server.Close()
-	log.Println("Listening using SSL on :" + port)
+	log.Println("kik-go-proxy listening using \033[0;32mSSL\033[0m on :" + port)
 	for {
 		connection, err := server.Accept()
 		if err != nil {
@@ -250,7 +250,7 @@ func openPlainServer(port string) {
 		log.Fatal("Error opening unencrypted socket:" + err.Error())
 	}
 	defer server.Close()
-	log.Println("Listening unencrypted on :" + port)
+	log.Println("kik-go-proxy listening \033[0;31munencrypted\033[0m on :" + port)
 	for {
 		connection, err := server.Accept()
 		if err != nil {
