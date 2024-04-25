@@ -65,7 +65,7 @@ func (k InitialStreamTag) UserId() string {
 // Kik uses different host names dependent on the OS and client version.
 // error is not nil if the client supplies an invalid version number.
 func (k InitialStreamTag) KikHost() (*string, error) {
-	ios := k.DeviceId.Prefix[2] == 'I'
+	ios := k.DeviceId.Prefix[1] == 'I'
 	var suffix string
 	var parts []string
 	if ios {
