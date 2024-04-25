@@ -2,8 +2,9 @@ package node
 
 import (
 	"errors"
-	"log"
+	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/bluemods/kik-go-proxy/crypto"
@@ -20,6 +21,9 @@ var (
 
 // Describes a bind request from the client
 type InitialStreamTag struct {
+	// The IP address of the connected client
+	ClientIp string
+
 	// The attributes in the <k stanza
 	Attributes map[string]string
 
@@ -35,6 +39,9 @@ type InitialStreamTag struct {
 	// The device ID in use by the client, not nil
 	DeviceId datatypes.KikDeviceId
 
+	// The version name in use by the client, not nil
+	Version string
+
 	// Optional interface IP specified by the client
 	InterfaceIp *string
 
@@ -45,7 +52,7 @@ type InitialStreamTag struct {
 // Returns a unique identifier for the connecting client.
 // For authed connections, this is the JID
 // For anon connections, this is the Device ID (with prefix)
-func (k InitialStreamTag) GetUserId() string {
+func (k InitialStreamTag) UserId() string {
 	if k.IsAuth {
 		return k.Jid.GetIdentifier()
 	} else {
@@ -53,17 +60,43 @@ func (k InitialStreamTag) GetUserId() string {
 	}
 }
 
-// Generates the stream init tag initally written to the outbound socket to Kik.
-func (k InitialStreamTag) GenerateStreamInitTag(iosMode bool) string {
-	if iosMode {
-		if IosTransformer == nil {
-			log.Println("iosMode specified but there is no implementation registered. Using client generated tag.")
-			return k.RawStanza
+// Returns the corresponding XMPP host name
+// based on the connecting client info.
+// Kik uses different host names dependent on the OS and client version.
+// error is not nil if the client supplies an invalid version number.
+func (k InitialStreamTag) KikHost() (*string, error) {
+	ios := k.DeviceId.Prefix[2] == 'I'
+	var suffix string
+	var parts []string
+	if ios {
+		suffix = "ip"
+		parts = strings.Split(k.Version, ".")
+	} else {
+		suffix = "an"
+		parts = strings.Split(k.Version, ".")
+	}
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid version '" + k.Version + "'")
+	}
+	host := new(strings.Builder)
+	host.WriteString("talk")
+	for i := 0; i < 2; i++ {
+		if num, err := strconv.Atoi(parts[i]); num < 0 || err != nil {
+			// One of the parts is not a valid number.
+			// This blocks clients from attempting to connect us to arbitrary hosts.
+			return nil, fmt.Errorf("invalid version '" + k.Version + "'")
+		}
+		if i == 1 && ios {
+			host.WriteString("0")
 		} else {
-			return IosTransformer.MakeStreamInitTag(k)
+			host.WriteString(parts[i])
 		}
 	}
-	return k.RawStanza
+	host.WriteString("0")
+	host.WriteString(suffix)
+	host.WriteString(".kik.com")
+	ret := host.String()
+	return &ret, nil
 }
 
 // Parses and verifies the initial stream tag from the client.
@@ -73,6 +106,7 @@ func (k InitialStreamTag) GenerateStreamInitTag(iosMode bool) string {
 func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	defer utils.TimeMethod("ParseInitialStreamTag")()
 
+	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 	var startTagSeen bool = false
 	var whitespaceCount int = 0
 	var characterCount int = 0
@@ -81,8 +115,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	buf := make([]byte, 1)
 
 	for {
-		_, err := conn.Read(buf)
-		if err != nil {
+		if _, err := conn.Read(buf); err != nil {
 			errMessage := err.Error()
 			for _, offense := range _bannableOffenses {
 				if strings.Contains(errMessage, offense) {
@@ -134,16 +167,19 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		return nil, true, err
 	}
 
-	var attributes map[string]string = node.Attributes
+	attrs := node.Attributes
 
 	var ret InitialStreamTag
 
-	if _, ok := attributes["anon"]; ok {
+	if _, ok := attrs["anon"]; ok {
 		// This is an anon connection (pre-auth)
-
-		dev, ok := attributes["dev"]
+		dev, ok := attrs["dev"]
 		if !ok {
 			return nil, true, errors.New("no dev attribute in anon stanza")
+		}
+		v, ok := attrs["v"]
+		if !ok {
+			return nil, true, errors.New("no v attribute in anon stanza")
 		}
 
 		deviceId, err := datatypes.ParseDeviceId(dev)
@@ -152,36 +188,42 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		}
 
 		ret = InitialStreamTag{
-			Attributes: attributes,
+			ClientIp:   ip,
+			Attributes: attrs,
 			RawStanza:  stanza.String(),
 			IsAuth:     false,
 			Jid:        nil,
 			DeviceId:   *deviceId,
+			Version:    v,
 		}
 	} else {
 		// This is an authorized connection (post-auth)
-
-		from, ok := attributes["from"]
+		from, ok := attrs["from"]
 		if !ok {
 			return nil, true, errors.New("no from attribute in auth stanza")
 		}
-
 		jid, err := datatypes.ParseFullJid(from)
 		if err != nil {
 			return nil, true, err
 		}
+		v, ok := attrs["v"]
+		if !ok {
+			return nil, true, errors.New("no v attribute in auth stanza")
+		}
 
 		ret = InitialStreamTag{
-			Attributes: attributes,
+			ClientIp:   ip,
+			Attributes: attrs,
 			RawStanza:  stanza.String(),
 			IsAuth:     true,
 			Jid:        jid,
 			DeviceId:   jid.DeviceId,
+			Version:    v,
 		}
 	}
 
 	// Verify stanza
-	expected := crypto.MakeKTag(attributes)
+	expected := crypto.MakeKTag(attrs)
 	received := ret.RawStanza
 	if expected != received {
 		err := errors.New(
@@ -192,20 +234,20 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 
 	var needsTransform bool = false
 
-	if v, ok := attributes["x-interface"]; ok {
+	if v, ok := attrs["x-interface"]; ok {
 		ret.InterfaceIp = &v
 		needsTransform = true
-		delete(attributes, "x-interface")
+		delete(attrs, "x-interface")
 	}
-	if v, ok := attributes["x-api-key"]; ok {
+	if v, ok := attrs["x-api-key"]; ok {
 		ret.ApiKey = &v
 		needsTransform = true
-		delete(attributes, "x-api-key")
+		delete(attrs, "x-api-key")
 	}
 	if needsTransform {
 		// Elements were removed, which invalidates the order.
 		// Server must re-sort the elements.
-		ret.RawStanza = crypto.MakeKTag(attributes)
+		ret.RawStanza = crypto.MakeKTag(attrs)
 	}
 	return &ret, false, nil
 }

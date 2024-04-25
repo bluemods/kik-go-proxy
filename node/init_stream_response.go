@@ -69,7 +69,6 @@ func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamRespons
 		stanza = input.Reader.GetBuffer()
 	} else {
 		// Not ok, the tag will be self closing
-		// TODO return specialized error codes
 		_, xml, err := input.ReadNextStanza()
 		if err != nil {
 			return nil, err

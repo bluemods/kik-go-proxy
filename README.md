@@ -39,10 +39,10 @@ By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 | -p12       | The relative path to your .p12 certificate file.                |
 | -p12-pass  | The relative path to the file containing the p12 cert password. |
 | -i         | The relative path to your interface IP list, one per line       |
-| -iface     | The interface name to use, default is 'eth0'                    |
+| -iface     | The interface name to use, used with -i                         |
 | -a         | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header. |
-| -whitelist | file containing JIDs / device IDs that do not require API key authentication, one per line |
-| -ban       | If specified, misbehaving clients will be IP banned from the server using iptables         |
+| -whitelist | file containing JIDs / device IDs that do not require API key authentication, one per line         |
+| -ban       | If specified, misbehaving clients will be IP banned from the server using iptables                 |
 | -banner    | If specified, the server sends back a 'server' header to the client upon successful authentication |
 
 ## Notices

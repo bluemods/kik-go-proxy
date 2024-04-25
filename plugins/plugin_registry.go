@@ -1,6 +1,11 @@
-package node
+package plugins
 
-import "crypto/tls"
+import (
+	"crypto/tls"
+	"net"
+
+	"github.com/bluemods/kik-go-proxy/node"
+)
 
 // The implementation for this interface is not publicly provided.
 // To implement this interface, do the following:
@@ -11,30 +16,22 @@ import "crypto/tls"
 //
 //	 package node
 //
-//	 type IosPacketTransformerImpl struct {
-//		IosPacketTransformer
-//	 }
+//	 type ProxyInterceptorImpl struct {}
 //
 //	 // implement all funcs here...
 //
 //	 // init is a special method that is automatically called by the runtime
 //	 func init() {
-//		Transformer = &IosPacketTransformerImpl{}
+//		Transformer = &ProxyInterceptor{}
 //	 }
-type IosPacketTransformer interface {
+type ProxyInterceptor interface {
 	// Dials the XMPP server using the InitialStreamTag from the client as context.
 	// Here you can use a custom domain, chain proxies, etc.
 	// You should not read from or write to the socket, the server handles this already.
-	Dial(InitialStreamTag) (*tls.Conn, error)
+	Dial(k *node.InitialStreamTag, dialer *net.Dialer, network string, addr string, config *tls.Config) (*tls.Conn, error)
 
 	// Transforms a stream init tag to iOS format.
-	MakeStreamInitTag(InitialStreamTag) string
-
-	// Translates a login request to iOS format.
-	// MakeLoginXml() string
-
-	// Translates a sign up request to iOS format.
-	// MakeSignUpXml() string
+	MakeStreamInitTag(k *node.InitialStreamTag) string
 
 	// Translates an outgoing message stanza to iOS format.
 	// TransformMessageStanza() string
@@ -42,5 +39,5 @@ type IosPacketTransformer interface {
 
 var (
 	// Will be nil when not implemented
-	IosTransformer IosPacketTransformer
+	Interceptor ProxyInterceptor
 )

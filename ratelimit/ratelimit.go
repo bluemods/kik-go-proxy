@@ -41,18 +41,18 @@ type KikRateLimiter struct {
 // Only contains the fields required for acking the stanza via QoS.
 type SimpleKikMessage struct {
 	// The ID of the message
-	Id            string
+	Id string
 
 	// The JID of the chat.
-	// If IsGroup == true, this is the group JID. 
+	// If IsGroup == true, this is the group JID.
 	// Otherwise it is the same value as the Correspondent.
-	Bin           string
+	Bin string
 
 	// The JID of the sender (the user that generated the message)
 	Correspondent string
 
 	// True if this message originated from a Kik Group
-	IsGroup       bool
+	IsGroup bool
 }
 
 type QoSMessageSorter struct {
@@ -188,7 +188,7 @@ func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
 	kikConn.Write([]byte(stanza))
 }
 
-func CreateRateLimiter() *KikRateLimiter {
+func NewRateLimiter() *KikRateLimiter {
 	return &KikRateLimiter{
 		ChatIds: *expirable.NewLRU[string, *rate.Limiter](0, nil, LRU_EXPIRE_TIME),
 	}

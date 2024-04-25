@@ -12,17 +12,16 @@ type ConcurrentSet[K comparable] struct {
 }
 
 // Adds a key to the set.
-// Returns true if the key was added to the set,
-// Returns false if the key is already in the set.
+// Returns true if the key is already present in the set.
 func (s *ConcurrentSet[K]) Add(key K) bool {
 	s.Lock()
 	defer s.Unlock()
-	_, ok := s._map[key]
-	if !ok {
+	_, found := s._map[key]
+	if !found {
 		// Add if not present
 		s._map[key] = struct{}{}
 	}
-	return ok
+	return found
 }
 
 // Deletes a key from the set.
