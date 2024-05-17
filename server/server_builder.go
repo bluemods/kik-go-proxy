@@ -89,7 +89,7 @@ func (s *ServerConfig) WithBanHosts() *ServerConfig {
 // If a peer sends too many messages to the client,
 // the server will intercept and delete them.
 func (s *ServerConfig) WithAntiSpam() *ServerConfig {
-	return s.WithAntiSpamFunc(func(k *node.InitialStreamTag) bool { return true })
+	return s.WithAntiSpamFunc(func(*node.InitialStreamTag) bool { return true })
 }
 
 // All clients matching f will be protected by rate limiting.
@@ -102,7 +102,7 @@ func (s *ServerConfig) WithAntiSpamFunc(f func(k *node.InitialStreamTag) bool) *
 
 // Server logs all XMPP sent and received to the 'xmpp' directory.
 func (s *ServerConfig) WithXmppLogging() *ServerConfig {
-	return s.WithAntiSpamFunc(func(k *node.InitialStreamTag) bool { return true })
+	return s.WithAntiSpamFunc(func(*node.InitialStreamTag) bool { return true })
 }
 
 // Server logs all XMPP sent and received to the 'xmpp' directory

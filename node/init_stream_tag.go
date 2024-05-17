@@ -81,7 +81,7 @@ func (k InitialStreamTag) KikHost() (*string, error) {
 	host := new(strings.Builder)
 	host.WriteString("talk")
 	for i := 0; i < 2; i++ {
-		if num, err := strconv.Atoi(parts[i]); num < 0 || err != nil {
+		if num, err := strconv.Atoi(parts[i]); err != nil || num < 0 {
 			// One of the parts is not a valid number.
 			// This blocks clients from attempting to connect us to arbitrary hosts.
 			return nil, fmt.Errorf("invalid version '" + k.Version + "'")

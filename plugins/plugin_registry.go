@@ -30,10 +30,10 @@ type ProxyInterceptor interface {
 	// You should not read from or write to the socket, the server handles this already.
 	Dial(k *node.InitialStreamTag, dialer *net.Dialer, network string, addr string, config *tls.Config) (*tls.Conn, error)
 
-	// Transforms a stream init tag to iOS format.
+	// Transforms a stream init tag.
 	MakeStreamInitTag(k *node.InitialStreamTag) string
 
-	// Translates an outgoing message stanza to iOS format.
+	// Translates an outgoing message stanza.
 	// TransformMessageStanza() string
 }
 
