@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/bluemods/kik-go-proxy/crypto"
-	xpp "github.com/bluemods/kik-go-proxy/goxpp"
+	xpp "github.com/bluemods/kik-go-proxy/third_party/goxpp"
 	"github.com/bluemods/kik-go-proxy/utils"
 )
 

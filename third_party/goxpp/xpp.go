@@ -1,14 +1,14 @@
-// This is a heavily modified version of goxpp, taken from here:
-// github.com/mmcdole/goxpp
+// This is a heavily modified version of goxpp.
 // See the LICENSE file in the current directory for copyright information.
 package xpp
 
 import (
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
+
+	xml "github.com/bluemods/kik-go-proxy/third_party/encoding/xml"
 )
 
 type XMLEventType int
@@ -23,8 +23,8 @@ const (
 	Comment
 	ProcessingInstruction
 	Directive
-	IgnorableWhitespace // TODO: ?
-	// TODO: CDSECT ?
+	IgnorableWhitespace // TO DO: ?
+	// TO DO: CDSECT ?
 )
 
 type XMLPullParser struct {
@@ -144,8 +144,7 @@ func (p *XMLPullParser) NextText() (string, error) {
 		}
 
 		if t != EndTag && t != Text {
-			errstr := fmt.Sprintf("Event Text must be immediately followed by EndTag or Text but got %s", p.EventName(t))
-			return "", errors.New(errstr)
+			return "", fmt.Errorf("Event Text must be immediately followed by EndTag or Text but got %s", p.EventName(t))
 		}
 	}
 

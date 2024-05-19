@@ -3,7 +3,7 @@ package node
 import (
 	"bytes"
 
-	"github.com/shabbyrobe/xmlwriter"
+	xmlwriter "github.com/bluemods/kik-go-proxy/third_party/xmlwriter"
 )
 
 // Simplifies stanza creation.

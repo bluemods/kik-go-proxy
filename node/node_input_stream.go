@@ -7,7 +7,7 @@ import (
 	"io"
 	"net"
 
-	xpp "github.com/bluemods/kik-go-proxy/goxpp"
+	xpp "github.com/bluemods/kik-go-proxy/third_party/goxpp"
 )
 
 type NodeInputStream struct {
