@@ -40,7 +40,7 @@ func makeId(uuid []byte) string {
 		result[i+8] = byte(lsb >> uint((7-i)*8))
 	}
 
-	sb := &strings.Builder{}
+	sb := strings.Builder{}
 	sb.Grow(36)
 	sb.WriteString(hex.EncodeToString(result[0:4]))
 	sb.WriteByte('-')
