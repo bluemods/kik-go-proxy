@@ -1,81 +1,55 @@
 package crypto
 
 import (
-	"encoding/binary"
-	"errors"
-
-	"github.com/google/uuid"
+	"crypto/rand"
+	"encoding/hex"
+	"strings"
 )
 
+// Generates a valid Kik UUID.
 func GenerateUUID() string {
-	for {
-		if id, _ := makeId(uuid.New()); id != nil {
-			return id.String()
-		}
+	uuid := make([]byte, 16)
+	if _, err := rand.Read(uuid); err != nil {
+		panic(err)
 	}
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 // Clear version, set to 4 for random
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 // Clear version, set to 10
+	return makeId(uuid)
 }
 
-// Mostly converted from smali bytecode after
-// decompiling a known working implementation in Java
-//
-// returns the new ID if successful,
-// or an error if the ID is not compatible
-func makeId(id uuid.UUID) (*uuid.UUID, error) {
-	if id.Version() != 4 {
-		return nil, errors.New("UUID not V4")
-	}
-	bytes := id[:]
-	lsb := int64(binary.BigEndian.Uint64(bytes[8:]))
-	msb := int64(binary.BigEndian.Uint64(bytes[:8]))
+func makeId(uuid []byte) string {
+	msb := uint64(uuid[0])<<56 | uint64(uuid[1])<<48 | uint64(uuid[2])<<40 | uint64(uuid[3])<<32 |
+		uint64(uuid[4])<<24 | uint64(uuid[5])<<16 | uint64(uuid[6])<<8 | uint64(uuid[7])
 
-	var i int32 = int32((msb & -1152921504606846976) >> 62)
+	lsb := uint64(uuid[8])<<56 | uint64(uuid[9])<<48 | uint64(uuid[10])<<40 | uint64(uuid[11])<<32 |
+		uint64(uuid[12])<<24 | uint64(uuid[13])<<16 | uint64(uuid[14])<<8 | uint64(uuid[15])
 
-	if i < 0 {
-		// TODO: this is a workaround as ~50% of IDs generated aren't
-		// compatible. Find a better way then remove this.
-		return nil, errors.New("UUID not compatible")
-	}
-	var j int64 = (msb&-16777216)>>22 ^ (msb&16711680)>>16 ^ (msb&65280)>>8
-
-	arr := [][]int32{{3, 6}, {2, 5}, {7, 1}, {9, 5}}
-
-	i = shift(msb, arr[i][1]) + 1 | shift(msb, arr[i][0])<<1
-
-	var i2 int32 = int32(0)
-	var i3 int32 = int32(1)
-	for i2 < 6 {
-		i3 = (i3 + (i * 7)) % 60
-		var i5 int32 = i3 + 2
-
-		var preShift1 int64 = int64(shift(j, i2))
-		var shift1 int64 = preShift1 << i5
-		var shift2 int64 = int64(lsb &^ powerOfTwo(i5))
-
-		lsb = shift1 | shift2
-
-		// fmt.Printf("i=%d, j=%d, i3=%d, i5=%d, lsb=%d, i2=%d, ps1=%d, s1=%d, s2=%d\n",
-		//            i, j, i3, i5, lsb, i2, preShift1, shift1, shift2)
-		i2++
+	variant := int(msb >> 62)
+	bitPositions := [4][2]int{{3, 6}, {2, 5}, {7, 1}, {9, 5}}
+	key := int((msb&0xFF000000)>>22) ^ int((msb&0x00FF0000)>>16) ^ int((msb&0x0000FF00)>>8)
+	value := (int(msb>>uint(bitPositions[variant][1]))&1 + 1) | (int(msb>>uint(bitPositions[variant][0]))&1)<<1
+	index := 1
+	for i := range 6 {
+		index = ((value * 7) + index) % 60
+		lsb = (lsb & (^(1 << uint(index+2)))) | (uint64(key>>i&1) << uint(index+2))
 	}
 
-	newBytes := make([]byte, 16)
-	binary.BigEndian.PutUint64(newBytes[:8], uint64(msb))
-	binary.BigEndian.PutUint64(newBytes[8:], uint64(lsb))
-	newUuid, _ := uuid.FromBytes(newBytes)
-	return &newUuid, nil
-}
-
-func shift(j int64, i int32) int32 {
-	var one int64 = 1
-	if i > 32 {
-		return int32((j >> 32 & one << i)) >> i
-	} else {
-		ret := one << i
-		ret = ret & j
-		return int32(ret) >> i
+	var result [16]byte
+	for i := range 8 {
+		result[i] = byte(msb >> uint((7-i)*8))
+		result[i+8] = byte(lsb >> uint((7-i)*8))
 	}
-}
 
-func powerOfTwo(i int32) int64 {
-	return int64(1) << i
+	sb := &strings.Builder{}
+	sb.Grow(36)
+	sb.WriteString(hex.EncodeToString(result[0:4]))
+	sb.WriteByte('-')
+	sb.WriteString(hex.EncodeToString(result[4:6]))
+	sb.WriteByte('-')
+	sb.WriteString(hex.EncodeToString(result[6:8]))
+	sb.WriteByte('-')
+	sb.WriteString(hex.EncodeToString(result[8:10]))
+	sb.WriteByte('-')
+	sb.WriteString(hex.EncodeToString(result[10:]))
+	return sb.String()
 }
