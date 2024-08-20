@@ -88,7 +88,7 @@ func (k InitialStreamTag) KikHost() (*string, error) {
 		}
 		if i == 1 && ios {
 			host.WriteString("0")
-		} else if ios && parts[i] == "17" {
+		} else if ios && i == 0 && parts[i] == "17" {
 			// iOS fix
 			host.WriteString("16")
 		} else {
