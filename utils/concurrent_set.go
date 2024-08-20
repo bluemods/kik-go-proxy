@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"sync"
 )
 
@@ -57,10 +58,46 @@ func (s *ConcurrentSet[K]) Size() int {
 
 // Returns true if the set is currently empty (has a size of 0)
 func (s *ConcurrentSet[K]) IsEmpty() bool {
-	return s.Size() == 0
+	s.Lock()
+	defer s.Unlock()
+	return len(s._map) == 0
+}
+
+// Returns all values in the set.
+func (s *ConcurrentSet[K]) Values() []K {
+	s.Lock()
+	defer s.Unlock()
+	v := make([]K, 0, len(s._map))
+	for k := range s._map {
+		v = append(v, k)
+	}
+	return v
 }
 
 // Create a new concurrent set.
 func NewConcurrentSet[K comparable]() *ConcurrentSet[K] {
 	return &ConcurrentSet[K]{_map: make(map[K]struct{})}
+}
+
+func (s *ConcurrentSet[K]) MarshalJSON() ([]byte, error) {
+	s.Lock()
+	defer s.Unlock()
+	v := make([]K, 0, len(s._map))
+	for k := range s._map {
+		v = append(v, k)
+	}
+	return json.Marshal(v)
+}
+
+func (s *ConcurrentSet[K]) UnmarshalJSON(data []byte) error {
+	s.Lock()
+	defer s.Unlock()
+	arr := &[]K{}
+	if err := json.Unmarshal(data, arr); err != nil {
+		return err
+	}
+	for _, v := range *arr {
+		s._map[v] = struct{}{}
+	}
+	return nil
 }
