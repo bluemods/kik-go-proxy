@@ -3,6 +3,7 @@ package node
 import (
 	"errors"
 	"io"
+	"iter"
 	"strings"
 
 	xpp "github.com/bluemods/kik-go-proxy/third_party/goxpp"
@@ -37,6 +38,17 @@ func (n Node) Get(key string) string {
 	}
 }
 
+// Finds an attribute value by its name.
+// Returns nil if not found.
+func (n Node) GetOptional(key string) *string {
+	ret, found := n.Attributes[key]
+	if found {
+		return &ret
+	} else {
+		return nil
+	}
+}
+
 // Finds the first matching child by its name.
 // Returns nil if not found.
 func (n Node) Find(name string) *Node {
@@ -46,6 +58,28 @@ func (n Node) Find(name string) *Node {
 		}
 	}
 	return nil
+}
+
+// Finds the text of the first matching child by its name.
+// Returns nil if not found.
+func (n Node) FindText(name string) *string {
+	for _, child := range n.Children {
+		if child.Name == name {
+			return &child.Text
+		}
+	}
+	return nil
+}
+
+// Finds the text of the first matching child by its name.
+// Returns an empty string if not found.
+func (n Node) FindTextSafe(name string) string {
+	for _, child := range n.Children {
+		if child.Name == name {
+			return child.Text
+		}
+	}
+	return ""
 }
 
 // Finds the last matching child by its name.
@@ -61,13 +95,35 @@ func (n Node) FindLast(name string) *Node {
 }
 
 // Finds all matching children by name.
-func (n Node) FindAll(name string) (ret []Node) {
-	for _, child := range n.Children {
-		if child.Name == name {
-			ret = append(ret, child)
+// For the iter.Seq2, the first item is the position of the child element,
+// the second item is the element.
+func (n Node) FindAll(name string) iter.Seq2[int, Node] {
+	return func(yield func(int, Node) bool) {
+		for i, child := range n.Children {
+			if child.Name == name {
+				if !yield(i, child) {
+					return
+				}
+			}
 		}
 	}
-	return ret
+}
+
+// Converts the node to an XML representation.
+func (n Node) String() string {
+	w := NewNodeWriter()
+	w.WriteNode(n)
+	w.EndAllFlush()
+	return w.String()
+}
+
+// Converts the node to an XML representation.
+// Pretty printed for visual parsing.
+func (n Node) IndentedString() string {
+	w := NewIndentedNodeWriter()
+	w.WriteNode(n)
+	w.EndAllFlush()
+	return w.String()
 }
 
 // Reads the next Node from the XMLPull Parser.

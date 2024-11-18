@@ -51,6 +51,33 @@ func (t Text) write(w *Writer) error {
 	return err
 }
 
+// Text represents an XML text section to be written by the Writer.
+// See Writer.WriteRawText()
+type RawText string
+
+func (t RawText) kind() NodeKind { return TextNode }
+
+func (t RawText) write(w *Writer) error {
+	s := string(t)
+	if w.Indenter != nil {
+		s = w.Indenter.Wrap(s)
+	}
+	if w.Enforce {
+		if err := w.checkParent(noNodeFlag | elemNodeFlag); err != nil {
+			return err
+		}
+		// TO DO: CharData ::= [^<&]* - ([^<&]* ']]>' [^<&]*)
+	}
+	if err := w.writeBeginNext(TextNode); err != nil {
+		return err
+	}
+	_, err := w.printer.WriteString(s)
+	if w.Indenter != nil {
+		w.last = Event{StateEnded, TextNode, 0}
+	}
+	return err
+}
+
 // CommentContent represents a text portion of an XML comment which can
 // be written after a Comment is Started.
 type CommentContent string

@@ -21,7 +21,7 @@ type NodeInputStream struct {
 //
 // If successful, the node object and the raw stanza
 // will be returned in the first two values.
-func (input NodeInputStream) ReadNextStanza() (*Node, *[]byte, error) {
+func (input NodeInputStream) ReadNextStanza() (node *Node, xml *[]byte, err error) {
 	parser := input.Parser
 	for {
 		event, err := parser.Next()

@@ -44,6 +44,7 @@ func main() {
 		if *port == -1 {
 			*port = constants.SSL_SERVER_PORT
 		}
+		log.Println("Certificate expires:", cert.Leaf.NotAfter)
 		c = server.NewTLS(*port, &tls.Config{
 			Certificates: []tls.Certificate{*cert},
 			MinVersion:   constants.SERVER_TLS_VERSION,
@@ -56,6 +57,7 @@ func main() {
 		if *port == -1 {
 			*port = constants.SSL_SERVER_PORT
 		}
+		log.Println("Certificate expires:", cert.Leaf.NotAfter)
 		c = server.NewTLS(*port, &tls.Config{
 			Certificates: []tls.Certificate{cert},
 			MinVersion:   constants.SERVER_TLS_VERSION,

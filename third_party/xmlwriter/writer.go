@@ -282,6 +282,10 @@ func (w *Writer) WriteText(text string) (err error) { return Text(text).write(w)
 // process.
 func (w *Writer) WriteRaw(raw string) error { return Raw(raw).write(w) }
 
+// WriteText writes an XML text node to the output. It is not escaped.
+// It can be written inside an Elem or as a top-level node.
+func (w *Writer) WriteRawText(text string) (err error) { return RawText(text).write(w) }
+
 // WriteAttr writes one or more XML element attributes to the output.
 func (w *Writer) WriteAttr(attrs ...Attr) (err error) {
 	for _, a := range attrs {
