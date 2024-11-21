@@ -42,7 +42,7 @@ By default, the server accepts TLSv1.2 and up for clients connecting using SSL.
 | -iface     | The interface name to use, used with -i                         |
 | -a         | The relative path to an API key.<br>If specified, all clients need to include the x-api-key="KEY HERE" attribute in the stream header. |
 | -whitelist | file containing JIDs / device IDs that do not require API key authentication, one per line         |
-| -ban       | If specified, misbehaving clients will be IP banned from the server using iptables                 |
+| -ban       | If specified, misbehaving clients will be IP banned from the server using iptables. If ipset is also installed, kik-go-proxy will create a new ipset hash list and ban them that way which is much more efficient. [See ip_banner.go](antispam/ip_banner.go)                 |
 | -banner    | If specified, the server sends back a 'server' header to the client upon successful authentication |
 
 ## Notices

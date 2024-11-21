@@ -3,20 +3,24 @@ package server
 import (
 	"net"
 	"sync"
-
-	"github.com/google/uuid"
+	"sync/atomic"
 )
 
-// I'm struggling to think of a better name. Suggest me one.
+var (
+	// uint32 has 4.2B limit,
+	// I don't think we will be serving that many connections
+	currentConnId = &atomic.Uint32{}
+)
+
 type KikConnectionHolder struct {
 	// Holds the list of active connections.
-	connections map[string]net.Conn
+	connections map[uint32]net.Conn
 	mutex       *sync.Mutex
 }
 
 func NewConnectionHolder() *KikConnectionHolder {
 	return &KikConnectionHolder{
-		connections: make(map[string]net.Conn),
+		connections: make(map[uint32]net.Conn),
 		mutex:       &sync.Mutex{},
 	}
 }
@@ -44,15 +48,15 @@ func (c *KikConnectionHolder) DisconnectAll() {
 	}
 }
 
-func (c *KikConnectionHolder) onConnected(conn net.Conn) string {
+func (c *KikConnectionHolder) onConnected(conn net.Conn) uint32 {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	connId := uuid.New().String()
+	connId := currentConnId.Add(1)
 	c.connections[connId] = conn
 	return connId
 }
 
-func (c *KikConnectionHolder) onDisconnected(connId string) {
+func (c *KikConnectionHolder) onDisconnected(connId uint32) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	conn, ok := c.connections[connId]
