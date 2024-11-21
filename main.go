@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 
+	_ "github.com/bluemods/kik-go-proxy/antispam"
 	"github.com/bluemods/kik-go-proxy/constants"
 	"github.com/bluemods/kik-go-proxy/plugins"
 	"github.com/bluemods/kik-go-proxy/server"
