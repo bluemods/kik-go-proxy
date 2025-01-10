@@ -4,6 +4,8 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+
+	"github.com/bluemods/kik-go-proxy/utils"
 )
 
 var (
@@ -13,7 +15,7 @@ var (
 )
 
 type KikConnectionHolder struct {
-	// Holds the list of active connections.
+	// Holds all active connections.
 	connections map[uint32]net.Conn
 	mutex       *sync.Mutex
 }
@@ -30,8 +32,8 @@ func (c *KikConnectionHolder) DisconnectIp(ip string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for connId, conn := range c.connections {
-		connIp, _, err := net.SplitHostPort(conn.RemoteAddr().String())
-		if err == nil && ip == connIp {
+		connIp := utils.ConnToIp(conn)
+		if ip == connIp {
 			conn.Close()
 			delete(c.connections, connId)
 		}

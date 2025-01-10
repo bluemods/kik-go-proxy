@@ -73,12 +73,12 @@ func (c *KikProxyConnection) clientThread() {
 			return
 		}
 		if c.Logger != nil {
-			c.Logger.OnNewStanza(*stanza, true)
+			c.Logger.OnNewStanza(stanza, true)
 		}
 
 		writeConn.SetWriteDeadline(time.Now().Add(constants.WRITE_TIMEOUT_SECONDS * time.Second))
-		if _, err = writeConn.Write(*stanza); err != nil {
-			c.handleWriteError(err, *stanza, isClientThread)
+		if _, err = writeConn.Write(stanza); err != nil {
+			c.handleWriteError(err, stanza, isClientThread)
 			return
 		}
 	}
@@ -103,7 +103,7 @@ func (c *KikProxyConnection) kikThread() {
 			return
 		}
 		if c.Logger != nil {
-			c.Logger.OnNewStanza(*stanza, false)
+			c.Logger.OnNewStanza(stanza, false)
 		}
 
 		if rateLimiter != nil && rateLimiter.ProcessMessage(readConn, *node) {
@@ -111,8 +111,8 @@ func (c *KikProxyConnection) kikThread() {
 		}
 
 		writeConn.SetWriteDeadline(time.Now().Add(constants.WRITE_TIMEOUT_SECONDS * time.Second))
-		if _, err = writeConn.Write(*stanza); err != nil {
-			c.handleWriteError(err, *stanza, isClientThread)
+		if _, err = writeConn.Write(stanza); err != nil {
+			c.handleWriteError(err, stanza, isClientThread)
 			return
 		}
 	}

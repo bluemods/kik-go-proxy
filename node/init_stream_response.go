@@ -73,7 +73,7 @@ func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamRespons
 		if err != nil {
 			return nil, err
 		}
-		stanza = *xml
+		stanza = xml
 	}
 	return &KikInitialStreamResponse{
 		IsOk:      isOk,

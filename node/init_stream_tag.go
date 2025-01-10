@@ -76,7 +76,7 @@ func (k InitialStreamTag) KikHost() (*string, error) {
 		parts = strings.Split(k.Version, ".")
 	}
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid version '" + k.Version + "'")
+		return nil, fmt.Errorf("invalid version '%s'", k.Version)
 	}
 	host := new(strings.Builder)
 	host.WriteString("talk")
@@ -84,7 +84,7 @@ func (k InitialStreamTag) KikHost() (*string, error) {
 		if num, err := strconv.Atoi(parts[i]); err != nil || num < 0 {
 			// One of the parts is not a valid number.
 			// This blocks clients from attempting to connect us to arbitrary hosts.
-			return nil, fmt.Errorf("invalid version '" + k.Version + "'")
+			return nil, fmt.Errorf("invalid version '%s'", k.Version)
 		}
 		if i == 1 && ios {
 			host.WriteString("0")
@@ -109,7 +109,7 @@ func (k InitialStreamTag) KikHost() (*string, error) {
 func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	defer utils.TimeMethod("ParseInitialStreamTag")()
 
-	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	var ip string = utils.ConnToIp(conn)
 	var startTagSeen bool = false
 	var whitespaceCount int = 0
 	var characterCount int = 0
@@ -162,10 +162,12 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 			}
 		}
 	}
-	if strings.HasSuffix(stanza.String(), "/>") {
-		return nil, true, errors.New("initial stream tag already closed\n" + stanza.String())
+
+	rawStanza := stanza.String()
+	if strings.HasSuffix(rawStanza, "/>") {
+		return nil, true, errors.New("initial stream tag already closed\n" + rawStanza)
 	}
-	node, err := ParseStreamHeader(stanza.String())
+	node, err := ParseStreamHeader(rawStanza)
 	if err != nil {
 		return nil, true, err
 	}
@@ -193,7 +195,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		ret = InitialStreamTag{
 			ClientIp:   ip,
 			Attributes: attrs,
-			RawStanza:  stanza.String(),
+			RawStanza:  rawStanza,
 			IsAuth:     false,
 			Jid:        nil,
 			DeviceId:   *deviceId,
@@ -217,7 +219,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		ret = InitialStreamTag{
 			ClientIp:   ip,
 			Attributes: attrs,
-			RawStanza:  stanza.String(),
+			RawStanza:  rawStanza,
 			IsAuth:     true,
 			Jid:        jid,
 			DeviceId:   jid.DeviceId,

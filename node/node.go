@@ -132,10 +132,11 @@ func ParseNextNode(parser *xpp.XMLPullParser) (*Node, error) {
 	if parser.Event != xpp.StartTag {
 		return nil, errors.New("expected start tag")
 	}
-	node := new(Node)
-	node.Text = ""
-	node.Name = parser.Name
-	node.Attributes = map[string]string{}
+	node := &Node{
+		Text:       "",
+		Name:       parser.Name,
+		Attributes: make(map[string]string, len(parser.Attrs)),
+	}
 	for _, attr := range parser.Attrs {
 		node.Attributes[attr.Name.Local] = attr.Value
 	}
@@ -173,10 +174,11 @@ func ParseStreamHeader(xmpp string) (*Node, error) {
 	if parser.Name != "k" {
 		return nil, errors.New("expected k tag")
 	}
-	node := new(Node)
-	node.Text = ""
-	node.Name = parser.Name
-	node.Attributes = map[string]string{}
+	node := &Node{
+		Text:       "",
+		Name:       parser.Name,
+		Attributes: make(map[string]string, len(parser.Attrs)),
+	}
 	for _, attr := range parser.Attrs {
 		node.Attributes[attr.Name.Local] = attr.Value
 	}

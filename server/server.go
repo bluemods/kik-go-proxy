@@ -16,6 +16,7 @@ import (
 	"github.com/bluemods/kik-go-proxy/node"
 	"github.com/bluemods/kik-go-proxy/ratelimit"
 	"github.com/bluemods/kik-go-proxy/server/connection"
+	"github.com/bluemods/kik-go-proxy/utils"
 )
 
 type Server struct {
@@ -75,11 +76,11 @@ func (s *Server) start() {
 
 	defer listener.Close()
 	for {
-		connection, err := listener.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			log.Println("Error accepting: " + err.Error())
 		} else {
-			go s.handleConnection(connection)
+			go s.handleConnection(conn)
 		}
 	}
 }
@@ -89,12 +90,7 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 	connId := s.connections.onConnected(clientConn)
 	defer s.connections.onDisconnected(connId)
 
-	ip, _, err := net.SplitHostPort(clientConn.RemoteAddr().String())
-	if err != nil {
-		// Shouldn't happen but being safe
-		log.Println("Rejecting connection, could not parse remote IP address")
-		return
-	}
+	ip := utils.ConnToIp(clientConn)
 
 	clientConn.SetReadDeadline(time.Now().Add(constants.CLIENT_INITIAL_READ_TIMEOUT_SECONDS * time.Second))
 	k, shouldBan, err := node.ParseInitialStreamTag(clientConn)
@@ -150,12 +146,16 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 
 	kikInput := node.NewNodeInputStream(kikConn)
 	defer kikInput.Reader.ClearBuffer()
+
 	kikResponse, err := node.ParseInitialStreamResponse(kikInput)
 	if err != nil {
 		log.Println("Failed to parse bind response:", err.Error())
 		return
 	}
-	clientConn.Write([]byte(kikResponse.GenerateServerResponse(s.config.customBanner)))
+	if _, err := clientConn.Write([]byte(kikResponse.GenerateServerResponse(s.config.customBanner))); err != nil {
+		log.Println("Failed to write bind response to client:", err.Error())
+		return
+	}
 	if !kikResponse.IsOk {
 		log.Println("Kik rejected bind:", kikResponse.RawStanza)
 		return
@@ -164,9 +164,6 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 	clientInput := node.NewNodeInputStream(clientConn)
 	defer clientInput.Reader.ClearBuffer()
 
-	rateLimiter := s.createRateLimiter(k)
-	logger := s.createXmppLogger(k)
-
 	c := &connection.KikProxyConnection{
 		UserId:      k.UserId(),
 		IsAuthed:    k.IsAuth,
@@ -174,8 +171,8 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 		ClientInput: clientInput,
 		KikConn:     kikConn,
 		KikInput:    kikInput,
-		RateLimiter: rateLimiter,
-		Logger:      logger,
+		RateLimiter: s.createRateLimiter(k),
+		Logger:      s.createXmppLogger(k),
 	}
 	c.Run() // Blocks until connection is complete
 }
@@ -184,6 +181,7 @@ func (s *Server) dialKik(k *node.InitialStreamTag) (*tls.Conn, error) {
 	kikHost, err := k.KikHost()
 	if err != nil {
 		s.banIp(k.ClientIp)
+		return nil, err
 	}
 	kikAddr := *kikHost + ":" + constants.KIK_SERVER_PORT
 	config := tls.Config{
@@ -195,12 +193,13 @@ func (s *Server) dialKik(k *node.InitialStreamTag) (*tls.Conn, error) {
 	}
 	if k.InterfaceIp != nil {
 		if s.config.ifaceMap == nil {
-			return nil, errors.New("client requested to use interface when not supported")
+			return nil, errors.New("client requested to use interface when not available")
 		}
 		tcpAddr, found := s.config.ifaceMap[*k.InterfaceIp]
 		if !found {
 			return nil, fmt.Errorf(
-				"failed connecting via custom interface; '%s' not found in allowlist %v", *k.InterfaceIp, s.config.ifaceMap)
+				"failed connecting via custom interface; '%s' not found in allowlist %v",
+				*k.InterfaceIp, s.config.ifaceMap)
 		}
 		dialer.LocalAddr = tcpAddr
 	}
@@ -230,6 +229,7 @@ func (s *Server) createXmppLogger(k *node.InitialStreamTag) *connection.XmppLogg
 	logger, err := connection.NewXmppLogger(outPath)
 	if err != nil {
 		log.Println("failed to create XMPP logger: ", outPath)
+		return nil
 	}
 	return logger
 }
