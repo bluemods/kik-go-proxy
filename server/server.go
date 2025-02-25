@@ -13,6 +13,7 @@ import (
 
 	"github.com/bluemods/kik-go-proxy/antispam"
 	"github.com/bluemods/kik-go-proxy/constants"
+	"github.com/bluemods/kik-go-proxy/crypto"
 	"github.com/bluemods/kik-go-proxy/node"
 	"github.com/bluemods/kik-go-proxy/ratelimit"
 	"github.com/bluemods/kik-go-proxy/server/connection"
@@ -106,7 +107,7 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 
 	if s.config.apiKey != nil && !s.isWhitelisted(k) {
 		apiKey := k.ApiKey
-		if apiKey == nil {
+		if apiKey == nil || len(*apiKey) == 0 {
 			log.Println(ip + ": API key missing when required")
 			s.banIp(ip)
 			return
@@ -120,15 +121,32 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 
 	kikConn, err := s.dialKik(k)
 	if err != nil {
-		log.Printf("Failed to dial %s to Kik (IP:%s): %s\n", k.UserId(), ip, err.Error())
+		log.Printf("Failed to dial %s to Kik (IP: %s): %s\n", k.UserId(), ip, err.Error())
 		return
 	}
 	defer kikConn.Close()
 
-	if kikConn.LocalAddr() != nil {
-		log.Printf("Accepting %s (%s <=> %s)\n", k.UserId(), ip, kikConn.LocalAddr())
+	var hasAccessToken string
+	if !k.IsAuth {
+		hasAccessToken = ""
+	} else if k.AccessToken != nil {
+		now := crypto.GetServerTimeAsTime()
+		notAfter := k.AccessToken.NotAfter
+		var expires string
+		if notAfter.After(now) {
+			expires = "\u001b[0;31m" + "expired at " + notAfter.String() + "\u001b[0m"
+		} else {
+			expires = "expires in " + notAfter.Sub(now).String()
+		}
+		hasAccessToken = " (access-token: \u001b[0;32m" + "yes, " + expires + "\u001b[0m)" // green
 	} else {
-		log.Printf("Accepting %s (IP: %s)\n", k.UserId(), ip)
+		hasAccessToken = " (access-token: \u001b[0;31m" + "no" + "\u001b[0m)" // red
+	}
+
+	if kikConn.LocalAddr() != nil {
+		log.Printf("Accepting %s (%s <=> %s)%s\n", k.UserId(), ip, kikConn.LocalAddr(), hasAccessToken)
+	} else {
+		log.Printf("Accepting %s (IP: %s)%s\n", k.UserId(), ip, hasAccessToken)
 	}
 
 	kikConn.SetDeadline(time.Now().Add(constants.KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second))

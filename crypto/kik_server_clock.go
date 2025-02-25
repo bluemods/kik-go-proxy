@@ -13,12 +13,12 @@ func MakeCryptoTimestamp() int64 {
 	var j2 int64 = (((j & 0xff00) >> 8) ^ ((j & 0xff0000) >> 16) ^ ((j & 0xff000000) >> 24)) & 30
 	var j3 int64 = (j & 224) >> 5
 	var j4 int64 = j & -255
-	if j2 % 4 == 0 {
+	if j2%4 == 0 {
 		j3 = (j3 / 3) * 3
 	} else {
 		j3 = (j3 / 2) * 2
 	}
-	return j4 | j3 << 5 | j2
+	return j4 | j3<<5 | j2
 }
 
 // Returns a timestamp synchronized with Kik's server.
@@ -29,6 +29,10 @@ func GetServerTime() int64 {
 
 func GetServerTimeAsString() string {
 	return strconv.FormatInt(GetServerTime(), 10)
+}
+
+func GetServerTimeAsTime() time.Time {
+	return time.UnixMilli(GetServerTime())
 }
 
 func SetServerTimeOffset(offset int64) {

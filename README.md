@@ -14,7 +14,7 @@ Use cases for this include:
 - Debugging traffic from the official mobile clients (stock Kik) or your custom client
 
 ## Requirements
-Go >= 1.21.3 (on *nix it can be easily installed [here](https://github.com/udhos/update-golang))
+Go >= 1.23 (on *nix it can be easily installed [here](https://github.com/udhos/update-golang))
 
 ## Install, build and run
 

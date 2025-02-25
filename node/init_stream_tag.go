@@ -47,6 +47,13 @@ type InitialStreamTag struct {
 
 	// Optional API key specified by the client
 	ApiKey *string
+
+	// Optional access token provided by the client, may be nil.
+	//
+	// See kik/login/jwt/v1/mobile_jwt_service.proto
+	//
+	// and kik/login/v1/mobile_login_service.proto
+	AccessToken *datatypes.AccessToken
 }
 
 // Returns a unique identifier for the connecting client.
@@ -215,15 +222,20 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		if !ok {
 			return nil, true, errors.New("no v attribute in auth stanza")
 		}
+		var accessToken *datatypes.AccessToken
+		if token, ok := attrs["access-token"]; ok && len(token) > 0 {
+			accessToken = datatypes.ParseAccessToken(token)
+		}
 
 		ret = InitialStreamTag{
-			ClientIp:   ip,
-			Attributes: attrs,
-			RawStanza:  rawStanza,
-			IsAuth:     true,
-			Jid:        jid,
-			DeviceId:   jid.DeviceId,
-			Version:    v,
+			ClientIp:    ip,
+			Attributes:  attrs,
+			RawStanza:   rawStanza,
+			IsAuth:      true,
+			Jid:         jid,
+			DeviceId:    jid.DeviceId,
+			Version:     v,
+			AccessToken: accessToken,
 		}
 	}
 

@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	// Default plaintext port
+	// Default plaintext port that the server listens on
 	PLAIN_SERVER_PORT = 5222
-	// Default SSL port
+	// Default SSL port that the server listens on
 	SSL_SERVER_PORT = 5223
 	// Listen on IPV4. Kik requires IPV4 so it should be no issue
 	SERVER_TYPE = "tcp4"
@@ -30,6 +30,25 @@ const (
 	// If you don't need to support 1.2 clients, change to `tls.VersionTLS13`
 	// DO NOT use lower than 1.2, as older protocols contain security flaws.
 	SERVER_TLS_VERSION = tls.VersionTLS12
+
+	// Max size of the initial stream payload that the client can send.
+	// Size has been increased to be larger than the sanity bound described in
+	// RefreshTokenRequest (mobile_jwt_service.proto)
+	MAX_STREAM_INIT_TAG_SIZE = 16_384
+
+	// Sent when the client must go through the verification flow.
+	// For testing
+	TEST_JWT_BIND_VERIFICATION_ERROR_STANZA = `<k ok="0">` +
+		`<jwt><msg>validation-failed</msg></jwt>` +
+		`<badver><msg>Badver should be ignored in favor of jwt tag. Update your parser.</msg></badver>` +
+		`</k>`
+
+	// Sent when the client must go through the refresh flow.
+	// For testing
+	TEST_JWT_BIND_REFRESH_ERROR_STANZA = `<k ok="0">` +
+		`<jwt><msg>expired-token</msg></jwt>` +
+		`<badver><msg>Badver should be ignored in favor of jwt tag. Update your parser.</msg></badver>` +
+		`</k>`
 )
 
 var (

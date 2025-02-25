@@ -61,7 +61,7 @@ func (s *ServerConfig) WithInterface(iface net.Interface, allowedIps []string) *
 
 	sb := new(strings.Builder)
 	for _, ip := range s.ifaceMap {
-		sb.Write([]byte(ip.String()))
+		sb.WriteString(ip.String())
 		sb.WriteByte(',')
 	}
 	log.Println("Using interface " + iface.Name + " (Extra IPs: " + sb.String() + ")")
