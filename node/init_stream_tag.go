@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bluemods/kik-go-proxy/constants"
 	"github.com/bluemods/kik-go-proxy/crypto"
 	"github.com/bluemods/kik-go-proxy/datatypes"
 	"github.com/bluemods/kik-go-proxy/utils"
@@ -138,7 +139,7 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		stanza.WriteByte(c)
 
 		characterCount++
-		if characterCount > 1024 {
+		if characterCount > constants.MAX_STREAM_INIT_TAG_SIZE {
 			return nil, true, errors.New("Too many characters in stream init tag\n" + stanza.String())
 		}
 

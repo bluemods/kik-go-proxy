@@ -133,7 +133,7 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 		now := crypto.GetServerTimeAsTime()
 		notAfter := k.AccessToken.NotAfter
 		var expires string
-		if notAfter.After(now) {
+		if now.After(notAfter) {
 			expires = "\u001b[0;31m" + "expired at " + notAfter.String() + "\u001b[0m"
 		} else {
 			expires = "expires in " + notAfter.Sub(now).String()
