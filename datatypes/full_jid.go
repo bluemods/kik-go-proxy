@@ -7,7 +7,7 @@ import (
 
 // The device ID component is relaxed compared to Kik's regex
 // Normally, it should be a random UUID with dashes omitted
-var fullJidRegex *regexp.Regexp = regexp.MustCompile(`^([a-z0-9\\.\\_]{2,30})(_[a-z0-9]{3})?@(.*)/([A-Z]{3})(.{6,32})$`)
+var fullJidRegex = regexp.MustCompile(`^([a-z0-9._]{2,30})(_[a-z0-9]{3})?@(.*)/([A-Z]{3})(.{6,32})$`)
 
 type FullJid struct {
 	LocalPart string
