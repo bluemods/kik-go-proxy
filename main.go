@@ -74,8 +74,8 @@ func main() {
 	if *iname != "" {
 		i, err := net.InterfaceByName(*iname)
 		if err != nil {
-			ifaces, err := net.Interfaces()
-			if err != nil {
+			ifaces, ifaceErr := net.Interfaces()
+			if ifaceErr != nil {
 				log.Fatal(err)
 			}
 			msg := "Missing interface, we can select from: "
