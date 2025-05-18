@@ -49,6 +49,12 @@ const (
 		`<jwt><msg>expired-token</msg></jwt>` +
 		`<badver><msg>Badver should be ignored in favor of jwt tag. Update your parser.</msg></badver>` +
 		`</k>`
+
+	// Sent when the client version is outdated or no longer accepted.
+	// For testing
+	TEST_BADVER_STANZA = `<k ok="0">` +
+		`<badver><msg>test</msg></badver>` +
+		`</k>`
 )
 
 var (
