@@ -209,20 +209,20 @@ func (s *Server) dialKik(k *node.InitialStreamTag) (*tls.Conn, error) {
 	dialer := net.Dialer{
 		Timeout: constants.KIK_INITIAL_READ_TIMEOUT_SECONDS * time.Second,
 	}
-	if k.InterfaceIp != nil {
+	if interfaceIp := k.InterfaceIp; interfaceIp != nil {
 		if s.config.ifaceMap == nil {
 			return nil, errors.New("client requested to use interface when not available")
 		}
-		tcpAddr, found := s.config.ifaceMap[*k.InterfaceIp]
+		tcpAddr, found := s.config.ifaceMap[*interfaceIp]
 		if !found {
 			return nil, fmt.Errorf(
 				"failed connecting via custom interface; '%s' not found in allowlist %v",
-				*k.InterfaceIp, s.config.ifaceMap)
+				*interfaceIp, s.config.ifaceMap)
 		}
 		dialer.LocalAddr = tcpAddr
 	}
-	if s.config.customDialerFunc != nil {
-		return s.config.customDialerFunc(k, &dialer, constants.KIK_SERVER_TYPE, kikAddr, &config)
+	if f := s.config.customDialerFunc; f != nil {
+		return f(k, &dialer, constants.KIK_SERVER_TYPE, kikAddr, &config)
 	}
 	return tls.DialWithDialer(&dialer, constants.KIK_SERVER_TYPE, kikAddr, &config)
 }

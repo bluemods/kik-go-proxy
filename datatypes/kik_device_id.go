@@ -5,7 +5,7 @@ import (
 	"regexp"
 )
 
-var deviceIdRegex *regexp.Regexp = regexp.MustCompile("^([A-Z]{3})(.{6,32})$")
+var deviceIdRegex = regexp.MustCompile("^([A-Z]{3})([A-Za-z0-9-_.]{6,32})$")
 
 type KikDeviceId struct {
 	// Describes the device type.
@@ -17,7 +17,7 @@ type KikDeviceId struct {
 }
 
 func ParseDeviceId(id string) (*KikDeviceId, error) {
-	var match [][]string = deviceIdRegex.FindAllStringSubmatch(id, -1)
+	var match = deviceIdRegex.FindAllStringSubmatch(id, -1)
 
 	if len(match) != 1 || len(match[0]) != 3 {
 		return nil, errors.New("Invalid device ID " + id)

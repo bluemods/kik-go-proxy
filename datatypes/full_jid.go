@@ -7,7 +7,7 @@ import (
 
 // The device ID component is relaxed compared to Kik's regex
 // Normally, it should be a random UUID with dashes omitted
-var fullJidRegex = regexp.MustCompile(`^([a-z0-9._]{2,30})(_[a-z0-9]{3})?@(.*)/([A-Z]{3})(.{6,32})$`)
+var fullJidRegex = regexp.MustCompile(`^([a-z0-9._]{2,30})(_[a-z0-9]{3})?@(.*)/([A-Z]{3})([A-Za-z0-9-_.]{6,32})$`)
 
 type FullJid struct {
 	LocalPart string
@@ -24,7 +24,7 @@ func (jid FullJid) String() string {
 }
 
 func ParseFullJid(jid string) (*FullJid, error) {
-	var match [][]string = fullJidRegex.FindAllStringSubmatch(jid, -1)
+	match := fullJidRegex.FindAllStringSubmatch(jid, -1)
 
 	if len(match) != 1 || len(match[0]) != 6 {
 		return nil, errors.New("Invalid JID " + jid)

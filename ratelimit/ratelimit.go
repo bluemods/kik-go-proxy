@@ -14,16 +14,16 @@ import (
 
 const (
 	// Max size that a batch of acks can be
-	MAX_QOS_BATCH_SIZE = 50
+	maxQosBatchSize = 50
 )
 
 var (
 	// Allow 10 messages in 10s
-	RATE_LIMIT       = rate.Every(10 * time.Second)
-	RATE_LIMIT_BURST = 10
+	rateLimit      = rate.Every(10 * time.Second)
+	rateLimitBurst = 10
 
 	// Auto remove key from map after 15s
-	LRU_EXPIRE_TIME = time.Second * 15
+	lruExpireTime = time.Second * 15
 )
 
 // Simple rate limiter that blocks stanzas when sent too quickly.
@@ -31,15 +31,15 @@ var (
 // This struct makes no guarantees when it comes to thread safety.
 type KikRateLimiter struct {
 	// Map key is the correspondent ID ("from" attribute in message stanza)
-	ChatIds expirable.LRU[string, *rate.Limiter]
+	chatIds expirable.LRU[string, *rate.Limiter]
 
 	// Messages currently blocked and waiting to be acked.
-	BlockedMessages []SimpleKikMessage
+	blockedMessages []simpleKikMessage
 }
 
 // Bare minimum struct for a Kik message.
 // Only contains the fields required for acking the stanza via QoS.
-type SimpleKikMessage struct {
+type simpleKikMessage struct {
 	// The ID of the message
 	Id string
 
@@ -55,19 +55,19 @@ type SimpleKikMessage struct {
 	IsGroup bool
 }
 
-type QoSMessageSorter struct {
+type qosMessageSorter struct {
 	Ids           []string
 	Bin           string
 	Correspondent string
-	_isGroup      bool
+	isGroup       bool
 }
 
-func (q *QoSMessageSorter) IsActuallyAGroup() bool {
-	return q._isGroup && q.Bin != q.Correspondent && strings.HasSuffix(q.Bin, "_g@groups.kik.com")
+func (q *qosMessageSorter) IsActuallyAGroup() bool {
+	return q.isGroup && q.Bin != q.Correspondent && strings.HasSuffix(q.Bin, "_g@groups.kik.com")
 }
 
 // Map key used for sorting the messages for the QoS stanza.
-func (m *SimpleKikMessage) GetMapKey() string {
+func (m *simpleKikMessage) GetMapKey() string {
 	return m.Bin + m.Correspondent + strconv.FormatBool(m.IsGroup)
 }
 
@@ -80,10 +80,10 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message node.Node) boo
 		return false
 	}
 
-	limiter, exists := i.ChatIds.Get(correspondent)
+	limiter, exists := i.chatIds.Get(correspondent)
 	if !exists {
-		limiter = rate.NewLimiter(RATE_LIMIT, RATE_LIMIT_BURST)
-		i.ChatIds.Add(correspondent, limiter)
+		limiter = rate.NewLimiter(rateLimit, rateLimitBurst)
+		i.chatIds.Add(correspondent, limiter)
 	}
 	blocked := !limiter.Allow()
 	if blocked {
@@ -108,17 +108,16 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message node.Node) boo
 				isGroup = true
 			}
 
-			message := SimpleKikMessage{
+			i.blockedMessages = append(i.blockedMessages, simpleKikMessage{
 				Id:            id,
 				Bin:           bin,
 				Correspondent: correspondent,
 				IsGroup:       isGroup,
-			}
-			i.BlockedMessages = append(i.BlockedMessages, message)
+			})
 
-			if len(i.BlockedMessages) >= MAX_QOS_BATCH_SIZE {
+			if len(i.blockedMessages) >= maxQosBatchSize {
 				i.FlushMessages(kikConn)
-				i.BlockedMessages = i.BlockedMessages[:0] // clears the array
+				clear(i.blockedMessages)
 			}
 		}
 	}
@@ -126,13 +125,13 @@ func (i *KikRateLimiter) ProcessMessage(kikConn net.Conn, message node.Node) boo
 }
 
 func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
-	if len(i.BlockedMessages) == 0 {
+	if len(i.blockedMessages) == 0 {
 		return
 	}
 
-	temp := make(map[string]*QoSMessageSorter)
+	temp := make(map[string]*qosMessageSorter)
 
-	for _, message := range i.BlockedMessages {
+	for _, message := range i.blockedMessages {
 		mapKey := message.GetMapKey()
 		sorter, found := temp[mapKey]
 		if found {
@@ -140,11 +139,11 @@ func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
 		} else {
 			ids := make([]string, 1)
 			ids[0] = message.Id
-			sorter = &QoSMessageSorter{
+			sorter = &qosMessageSorter{
 				Ids:           ids,
 				Bin:           message.Bin,
 				Correspondent: message.Correspondent,
-				_isGroup:      message.IsGroup,
+				isGroup:       message.IsGroup,
 			}
 			temp[mapKey] = sorter
 		}
@@ -190,6 +189,6 @@ func (i *KikRateLimiter) FlushMessages(kikConn net.Conn) {
 
 func NewRateLimiter() *KikRateLimiter {
 	return &KikRateLimiter{
-		ChatIds: *expirable.NewLRU[string, *rate.Limiter](0, nil, LRU_EXPIRE_TIME),
+		chatIds: *expirable.NewLRU[string, *rate.Limiter](0, nil, lruExpireTime),
 	}
 }

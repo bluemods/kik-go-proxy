@@ -32,9 +32,6 @@ type ProxyInterceptor interface {
 
 	// Transforms a stream init tag.
 	MakeStreamInitTag(k *node.InitialStreamTag) string
-
-	// Translates an outgoing message stanza.
-	// TransformMessageStanza() string
 }
 
 var (

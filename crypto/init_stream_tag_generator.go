@@ -2,29 +2,25 @@ package crypto
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha1"
-	"crypto/sha256"
+	"crypto"
 	"slices"
 	"strings"
 
 	orderedmap "github.com/wk8/go-ordered-map/v2"
+
+	_ "crypto/md5"
+	_ "crypto/sha1"
+	_ "crypto/sha256"
 )
 
-const (
-	SHA_256 = 0
-	SHA_1   = 1
-	MD5     = 2
-)
-
-type SortingMode struct {
-	Base   int32
-	Offset int32
+type sortingMode struct {
+	base   int32
+	offset int32
 }
 
 var (
-	BaseOrdering     = SortingMode{Base: -310256979, Offset: 13}
-	ExtendedOrdering = SortingMode{Base: -1964139357, Offset: 7}
+	baseOrdering     = sortingMode{base: -310256979, offset: 13}
+	extendedOrdering = sortingMode{base: -1964139357, offset: 7}
 )
 
 // Makes a 'k' tag, including correct spaces and order.
@@ -34,8 +30,8 @@ func MakeKTag(attrs map[string]string) string {
 		newMap.Set(k, v)
 	}
 
-	base := sortKikMap(newMap, BaseOrdering)
-	hashCode := hashStrongMap(BaseOrdering, base) % int32(29)
+	base := sortKikMap(newMap, baseOrdering)
+	hashCode := hashStrongMap(baseOrdering, base) % int32(29)
 
 	if hashCode < 0 {
 		hashCode += int32(29)
@@ -45,7 +41,7 @@ func MakeKTag(attrs map[string]string) string {
 	k.WriteString(strings.Repeat(" ", int(hashCode)))
 	k.WriteString("<k")
 
-	extended := sortKikMap(base, ExtendedOrdering)
+	extended := sortKikMap(base, extendedOrdering)
 	for pair := extended.Oldest(); pair != nil; pair = pair.Next() {
 		k.WriteString(" " + pair.Key + "=\"" + pair.Value + "\"")
 	}
@@ -53,7 +49,7 @@ func MakeKTag(attrs map[string]string) string {
 	return k.String()
 }
 
-func sortKikMap(om *orderedmap.OrderedMap[string, string], mode SortingMode) *orderedmap.OrderedMap[string, string] {
+func sortKikMap(om *orderedmap.OrderedMap[string, string], mode sortingMode) *orderedmap.OrderedMap[string, string] {
 	ret := orderedmap.New[string, string]()
 
 	omCopy := createCopy(om)
@@ -84,14 +80,14 @@ func sortKikMap(om *orderedmap.OrderedMap[string, string], mode SortingMode) *or
 	return ret
 }
 
-func hashStrongMap(mode SortingMode, om *orderedmap.OrderedMap[string, string]) int32 {
-	keySet := keySet(om)
-	reversedKeySet := copyAndReverse(keySet)
+func hashStrongMap(mode sortingMode, om *orderedmap.OrderedMap[string, string]) int32 {
+	keys := keySet(om)
+	reversedKeySet := copyAndReverse(keys)
 
 	forwardBuffer := new(bytes.Buffer)
 	backwardBuffer := new(bytes.Buffer)
 
-	for _, v := range keySet {
+	for _, v := range keys {
 		forwardBuffer.Write([]byte(v))
 		res, _ := om.Get(v)
 		forwardBuffer.Write([]byte(res))
@@ -105,13 +101,13 @@ func hashStrongMap(mode SortingMode, om *orderedmap.OrderedMap[string, string]) 
 	forwardBytes := forwardBuffer.Bytes()
 	backwardBytes := backwardBuffer.Bytes()
 
-	base := mode.Base
-	offset := mode.Offset
+	base := mode.base
+	offset := mode.offset
 
 	hashes := []int32{
-		hashBytes(SHA_256, forwardBytes),
-		hashBytes(SHA_1, forwardBytes),
-		hashBytes(MD5, backwardBytes),
+		hashBytes(crypto.SHA256, forwardBytes),
+		hashBytes(crypto.SHA1, forwardBytes),
+		hashBytes(crypto.MD5, backwardBytes),
 	}
 	return base ^ hashes[0]<<offset ^ hashes[2]<<(offset*2) ^ hashes[1]<<offset ^ hashes[0]
 }
@@ -136,20 +132,10 @@ func byteToSignedInt(num int) int {
 	}
 }
 
-func hashBytes(algorithm int, data []byte) int32 {
-	switch algorithm {
-	case SHA_256:
-		h := sha256.Sum256(data)
-		return mangleBytes(h[:])
-	case SHA_1:
-		h := sha1.Sum(data)
-		return mangleBytes(h[:])
-	case MD5:
-		h := md5.Sum(data)
-		return mangleBytes(h[:])
-	default:
-		panic("hashBytes: unknown algorithm")
-	}
+func hashBytes(hash crypto.Hash, data []byte) int32 {
+	h := hash.New()
+	h.Write(data)
+	return mangleBytes(h.Sum(nil))
 }
 
 // Ordered map helper functions
@@ -175,10 +161,10 @@ func remove(slice []string, s int32) []string {
 }
 
 func keySet(om *orderedmap.OrderedMap[string, string]) []string {
-	keySet := make([]string, om.Len())
+	keys := make([]string, om.Len())
 	for pair := om.Oldest(); pair != nil; pair = pair.Next() {
-		keySet = append(keySet, pair.Key)
+		keys = append(keys, pair.Key)
 	}
-	slices.Sort(keySet)
-	return keySet
+	slices.Sort(keys)
+	return keys
 }

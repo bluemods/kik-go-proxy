@@ -55,20 +55,20 @@ func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamRespons
 		}
 	}
 
-	var isOk bool = parser.Attribute("ok") == "1"
+	var isOk = parser.Attribute("ok") == "1"
 	var timestamp int64 = 0
 	var stanza []byte
 
 	if isOk {
 		// Ok response, stream header does not close until the stream ends
-		ts, _ := strconv.ParseInt(parser.Attribute("ts"), 10, 64)
-		if ts > 0 {
+		ts, err := strconv.ParseInt(parser.Attribute("ts"), 10, 64)
+		if err == nil && ts > 0 {
 			timestamp = ts
 			crypto.SetServerTimeOffset(ts - time.Now().UnixMilli())
 		}
 		stanza = input.Reader.GetBuffer()
 	} else {
-		// Not ok, the tag will be self closing
+		// Not ok, the tag will be self-closing
 		_, xml, err := input.ReadNextStanza()
 		if err != nil {
 			return nil, err
@@ -78,5 +78,6 @@ func ParseInitialStreamResponse(input NodeInputStream) (*KikInitialStreamRespons
 	return &KikInitialStreamResponse{
 		IsOk:      isOk,
 		Timestamp: timestamp,
-		RawStanza: string(stanza)}, nil
+		RawStanza: string(stanza),
+	}, nil
 }

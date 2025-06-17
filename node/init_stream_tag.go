@@ -117,10 +117,10 @@ func (k InitialStreamTag) KikHost() (*string, error) {
 func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 	defer utils.TimeMethod("ParseInitialStreamTag")()
 
-	var ip string = utils.ConnToIp(conn)
-	var startTagSeen bool = false
-	var whitespaceCount int = 0
-	var characterCount int = 0
+	var ip = utils.ConnToIp(conn)
+	var startTagSeen = false
+	var whitespaceCount = 0
+	var characterCount = 0
 
 	var stanza strings.Builder
 	buf := make([]byte, 1)
@@ -164,7 +164,6 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 				c == '=' || c == ' ' ||
 				c == '.' || c == '@' ||
 				c == '/' || c == '_' ||
-				c == '&' || c == ';' ||
 				c == '-' || c == '+' || c == ':') {
 				return nil, true, errors.New("invalid character '" + string(c) + "' in stream init tag\n" + stanza.String())
 			}
@@ -240,17 +239,24 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		}
 	}
 
+	// Prevent quote escapes
+	for k, v := range attrs {
+		if strings.ContainsRune(v, '"') || strings.Contains(v, "&quot;") {
+			return nil, true, fmt.Errorf(
+				"invalid header key '%s=%s', value contains a double quote", k, v)
+		}
+	}
+
 	// Verify stanza
 	expected := crypto.MakeKTag(attrs)
 	received := ret.RawStanza
 	if expected != received {
-		err := errors.New(
+		return nil, true, errors.New(
 			"initial stream tag failed verification\n" +
 				"Expected: " + expected + "\nReceived: " + received)
-		return nil, true, err
 	}
 
-	var needsTransform bool = false
+	needsTransform := false
 
 	if v, ok := attrs["x-interface"]; ok {
 		ret.InterfaceIp = &v

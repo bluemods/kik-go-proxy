@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	ipv4Regex *regexp.Regexp = regexp.MustCompile(
+	ipv4Regex = regexp.MustCompile(
 		`^((25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9])\.` +
 			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
 			`(25[0-5]|2[0-4][0-9]|[0-1][0-9]{2}|[1-9][0-9]|[1-9]|0)\.` +
@@ -21,7 +21,7 @@ var (
 	// Holds a set of IPs that are banned
 	// or in the process of being banned.
 	// Field is thread safe.
-	bannedIps *utils.ConcurrentSet[uint32] = utils.NewConcurrentSet[uint32]()
+	bannedIps = utils.NewConcurrentSet[uint32]()
 
 	// Name of the ipset that this client manages and adds IPs to.
 	ipSetList     = "kik_proxy_ban_list"
