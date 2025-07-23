@@ -1,5 +1,16 @@
 # Kik XMPP Go Proxy
 
+----------------
+
+Note: In May of 2025, Kik made changes to their backend in an effort to counter this repository, the main one being
+requiring IP matching for the gRPC endpoint and the XMPP connection (it checks the first two octets of your IPv4 address against the `_ip` claim in the JWT)
+
+This proxy doesn't handle gRPC, and so I no longer use this in production in favor of my (currently private) Kik Go / Java clients.
+
+This project is being left up in light maintenance mode, and for those interested to be able to learn some things about Kik.
+
+----------------
+
 Originally written in Java, but now being ported to Go (for performance reasons and learning), this tool allows you to proxy XMPP connections from your server to another by MITMing them.
 <br>
 The server listens on port 5222 for plain text connections by default, and 5223 by default for SSL connections.
