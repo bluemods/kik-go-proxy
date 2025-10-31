@@ -110,6 +110,26 @@ func (k InitialStreamTag) KikHost() (*string, error) {
 	return &ret, nil
 }
 
+func (k InitialStreamTag) IncludeCVToken() (bool, error) {
+	ios := k.DeviceId.Prefix[1] == 'I'
+	version := k.Version
+	return IncludeCVToken(ios, version)
+}
+
+func IncludeCVToken(ios bool, version string) (bool, error) {
+	var target datatypes.DecodedVersion
+	if ios {
+		target = datatypes.IosCvCutoffVersion
+	} else {
+		target = datatypes.AndroidCvCutoffVersion
+	}
+	subject, err := datatypes.ParseDecodedVersion(version)
+	if err != nil {
+		return false, err
+	}
+	return !target.IsAtOrAbove(subject), nil
+}
+
 // Parses and verifies the initial stream tag from the client.
 // If the error returned is nil, the parsing succeeded,
 // and the other return values must be ignored.
@@ -267,6 +287,21 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		ret.ApiKey = &v
 		needsTransform = true
 		delete(attrs, "x-api-key")
+	}
+	if _, ok := attrs["cv"]; ok {
+		include, err := ret.IncludeCVToken()
+		if err != nil {
+			return nil, true, err
+		}
+		if !include {
+			// Newer versions are moving away from CV tokens
+			// probably because they are redundant anyway.
+			// Remove them on the clients behalf
+			// if they included them by accident on a
+			// base version that no longer includes them.
+			needsTransform = true
+			delete(attrs, "cv")
+		}
 	}
 	if needsTransform {
 		// Elements were removed, which invalidates the order.
