@@ -54,7 +54,7 @@ type InitialStreamTag struct {
 	// See kik/login/jwt/v1/mobile_jwt_service.proto
 	//
 	// and kik/login/v1/mobile_login_service.proto
-	AccessToken *datatypes.AccessToken
+	AccessToken *string
 }
 
 // Returns a unique identifier for the connecting client.
@@ -242,9 +242,9 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		if !ok {
 			return nil, true, errors.New("no v attribute in auth stanza")
 		}
-		var accessToken *datatypes.AccessToken
+		var accessToken *string
 		if token, ok := attrs["access-token"]; ok && len(token) > 0 {
-			accessToken = datatypes.ParseAccessToken(token)
+			accessToken = &token
 		}
 
 		ret = InitialStreamTag{

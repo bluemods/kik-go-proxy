@@ -13,7 +13,6 @@ import (
 
 	"github.com/bluemods/kik-go-proxy/antispam"
 	"github.com/bluemods/kik-go-proxy/constants"
-	"github.com/bluemods/kik-go-proxy/crypto"
 	"github.com/bluemods/kik-go-proxy/node"
 	"github.com/bluemods/kik-go-proxy/ratelimit"
 	"github.com/bluemods/kik-go-proxy/server/connection"
@@ -130,15 +129,7 @@ func (s *Server) handleConnection(clientConn net.Conn) {
 	if !k.IsAuth {
 		hasAccessToken = ""
 	} else if k.AccessToken != nil {
-		now := crypto.GetServerTimeAsTime()
-		notAfter := k.AccessToken.NotAfter
-		var expires string
-		if now.After(notAfter) {
-			expires = "\u001b[0;31m" + "expired at " + notAfter.String() + "\u001b[0m"
-		} else {
-			expires = "expires in " + notAfter.Sub(now).String()
-		}
-		hasAccessToken = " (access-token: \u001b[0;32m" + "yes, " + expires + "\u001b[0m)" // green
+		hasAccessToken = " (access-token: \u001b[0;32m" + "yes" + "\u001b[0m)" // green
 	} else {
 		hasAccessToken = " (access-token: \u001b[0;31m" + "no" + "\u001b[0m)" // red
 	}

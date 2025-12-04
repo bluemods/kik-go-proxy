@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// Deprecated: new tokens being issued are JWE encrypted
 type AccessToken struct {
 	Raw string // Raw JWT as presented to ParseAccessToken
 
@@ -32,13 +33,14 @@ type AccessToken struct {
 
 // Parses the claims in an access token or refresh token JWT.
 // This method does not do any validation on the signature.
+// Deprecated: new tokens issued are JWE encrypted
 func ParseAccessToken(token string) *AccessToken {
 	if len(token) == 0 {
 		return nil
 	}
-	parts := strings.SplitN(token, ".", 3)
+	parts := strings.SplitN(token, ".", 4)
 	if len(parts) != 3 {
-		log.Println("ParseAccessToken: jwt is not 3 parts")
+		// This is either a JWE or invalid token
 		return nil
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
