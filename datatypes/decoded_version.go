@@ -11,9 +11,7 @@ var (
 	AndroidCvCutoffVersion = RequireDecodedVersion("17.8.0.33323")
 
 	// On this version and later, the CV token is removed.
-	// Note this is currently a placeholder,
-	// we will edit this to a real value once it's removed.
-	IosCvCutoffVersion = RequireDecodedVersion("99.9.9.99999")
+	IosCvCutoffVersion = RequireDecodedVersion("17.9.0.454")
 )
 
 type DecodedVersion struct {
