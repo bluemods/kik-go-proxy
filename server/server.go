@@ -192,9 +192,9 @@ func (s *Server) dialKik(k *node.InitialStreamTag) (*tls.Conn, error) {
 		s.banIp(k.ClientIp)
 		return nil, err
 	}
-	kikAddr := *kikHost + ":" + constants.KIK_SERVER_PORT
+	kikAddr := kikHost + ":" + constants.KIK_SERVER_PORT
 	config := tls.Config{
-		ServerName: *kikHost,
+		ServerName: kikHost,
 		MinVersion: constants.SERVER_TLS_VERSION,
 	}
 	dialer := net.Dialer{

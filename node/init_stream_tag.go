@@ -72,62 +72,37 @@ func (k InitialStreamTag) UserId() string {
 // based on the connecting client info.
 // Kik uses different host names dependent on the OS and client version.
 // error is not nil if the client supplies an invalid version number.
-func (k InitialStreamTag) KikHost() (*string, error) {
-	ios := k.DeviceId.Prefix[1] == 'I'
-	var suffix string
-	var parts []string
-	if ios {
-		suffix = "ip"
-		parts = strings.Split(k.Version, ".")
-	} else {
-		suffix = "an"
-		parts = strings.Split(k.Version, ".")
-	}
+func (k InitialStreamTag) KikHost() (string, error) {
+	isIOS := k.DeviceId.Prefix[1] == 'I'
+	parts := strings.SplitN(k.Version, ".", 5)
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid version '%s'", k.Version)
+		return "", fmt.Errorf("invalid version '%s'", k.Version)
 	}
-	host := new(strings.Builder)
-	host.WriteString("talk")
-	for i := 0; i < 2; i++ {
-		if num, err := strconv.Atoi(parts[i]); err != nil || num < 0 {
-			// One of the parts is not a valid number.
-			// This blocks clients from attempting to connect us to arbitrary hosts.
-			return nil, fmt.Errorf("invalid version '%s'", k.Version)
-		}
-		if i == 1 && ios {
-			host.WriteString("0")
-		} else if ios && i == 0 && parts[i] == "17" {
-			// iOS fix
-			host.WriteString("16")
-		} else {
+	major, err := strconv.Atoi(parts[0])
+	if major < 0 || err != nil {
+		return "", fmt.Errorf("invalid version '%s'", k.Version)
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if minor < 0 || err != nil {
+		return "", fmt.Errorf("invalid version '%s'", k.Version)
+	}
+
+	if isIOS {
+		// This is hardcoded in the app for all working versions
+		return "talk1600ip.kik.com", nil
+	} else if major >= 17 && minor >= 10 {
+		// This is hardcoded in the app for newer Android versions
+		return "talk1600an.kik.com", nil
+	} else {
+		// Legacy Android path
+		host := new(strings.Builder)
+		host.WriteString("talk")
+		for i := 0; i < 2; i++ {
 			host.WriteString(parts[i])
 		}
+		host.WriteString("0an.kik.com")
+		return host.String(), nil
 	}
-	host.WriteString("0")
-	host.WriteString(suffix)
-	host.WriteString(".kik.com")
-	ret := host.String()
-	return &ret, nil
-}
-
-func (k InitialStreamTag) IncludeCVToken() (bool, error) {
-	ios := k.DeviceId.Prefix[1] == 'I'
-	version := k.Version
-	return IncludeCVToken(ios, version)
-}
-
-func IncludeCVToken(ios bool, version string) (bool, error) {
-	var target datatypes.DecodedVersion
-	if ios {
-		target = datatypes.IosCvCutoffVersion
-	} else {
-		target = datatypes.AndroidCvCutoffVersion
-	}
-	subject, err := datatypes.ParseDecodedVersion(version)
-	if err != nil {
-		return false, err
-	}
-	return !target.IsAtOrAbove(subject), nil
 }
 
 // Parses and verifies the initial stream tag from the client.
@@ -289,19 +264,12 @@ func ParseInitialStreamTag(conn net.Conn) (*InitialStreamTag, bool, error) {
 		delete(attrs, "x-api-key")
 	}
 	if _, ok := attrs["cv"]; ok {
-		include, err := ret.IncludeCVToken()
-		if err != nil {
-			return nil, true, err
-		}
-		if !include {
-			// Newer versions are moving away from CV tokens
-			// probably because they are redundant anyway.
-			// Remove them on the clients behalf
-			// if they included them by accident on a
-			// base version that no longer includes them.
-			needsTransform = true
-			delete(attrs, "cv")
-		}
+		// CV tokens are obsolete.
+		// Remove them on the clients behalf
+		// if they included them by accident on a
+		// base version that no longer includes them.
+		needsTransform = true
+		delete(attrs, "cv")
 	}
 	if needsTransform {
 		// Elements were removed, which invalidates the order.
