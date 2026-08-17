@@ -5,9 +5,9 @@ go 1.25.0
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/wk8/go-ordered-map/v2 v2.1.8
-	golang.org/x/crypto v0.49.0
-	golang.org/x/net v0.52.0
-	golang.org/x/text v0.35.0
+	golang.org/x/crypto v0.55.0
+	golang.org/x/net v0.58.0
+	golang.org/x/text v0.41.0
 	golang.org/x/time v0.15.0
 )
 
